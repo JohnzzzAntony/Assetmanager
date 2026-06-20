@@ -88,11 +88,11 @@ function InfoRow({ label, value, icon: Icon }: { label: string; value?: React.Re
 
 function SectionCard({ title, icon: Icon, children, action }: { title: string; icon: typeof Cpu; children: React.ReactNode; action?: React.ReactNode }) {
   return (
-    <Card className="glass-panel-hover">
+    <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-3">
         <div className="flex items-center gap-2">
           <Icon className="h-4 w-4 text-muted-foreground" />
-          <CardTitle className="text-sm shimmer-underline">{title}</CardTitle>
+          <CardTitle className="text-sm">{title}</CardTitle>
         </div>
         {action}
       </CardHeader>
@@ -237,9 +237,10 @@ export function AssetDetailView({ id }: { id: string }) {
   const activityCount = activity?.length || 0
 
   return (
-    <div className="space-y-5 animate-fade-in-up">
+    <>
+      <div className="space-y-5 print:hidden">
       {/* Header */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between bg-radial-spotlight -mx-2 px-2 py-1 rounded-lg">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between -mx-2 px-2 py-1 rounded-lg">
         <div className="flex items-start gap-4">
           <Button variant="ghost" size="icon" onClick={back} className="-ml-2">
             <ArrowLeft className="h-4 w-4" />
@@ -414,6 +415,21 @@ export function AssetDetailView({ id }: { id: string }) {
               <InfoRow label="Color" value={asset.color} />
               <InfoRow label="Asset Tag" value={<span className="font-mono">{asset.assetTag}</span>} />
             </SectionCard>
+            <SectionCard title="Computer Details" icon={Cpu}>
+              <InfoRow label="Computer Name" value={<span className="font-mono">{asset.computerName}</span>} />
+              <InfoRow label="IP Address" value={<span className="font-mono">{asset.ipAddress}</span>} />
+              <InfoRow label="Device Type" value={asset.deviceType} />
+              <InfoRow label="Manufacture Year" value={asset.manufactureYear} />
+              <InfoRow label="Quantity" value={asset.qty} />
+            </SectionCard>
+            <SectionCard title="Printer / Scanner / Scale" icon={Package}>
+              <InfoRow label="Toners Model" value={asset.tonersModel} />
+              <InfoRow label="Barcode Scanner Model" value={asset.barcodeScannerModel} />
+              <InfoRow label="Barcode Scanner S/N" value={<span className="font-mono text-xs">{asset.barcodeScannerSn}</span>} />
+              <InfoRow label="Scale Machine IP" value={<span className="font-mono">{asset.scaleMachineIpAddress}</span>} />
+              <InfoRow label="HDD Installed Date" value={asset.hddInstalledDate} />
+              <InfoRow label="HDD Installed Date 2" value={asset.hddInstalledDate2} />
+            </SectionCard>
           </div>
         </TabsContent>
 
@@ -446,6 +462,7 @@ export function AssetDetailView({ id }: { id: string }) {
               <InfoRow label="Model" value={asset.monitorModel} />
               <InfoRow label="Serial" value={<span className="font-mono text-xs">{asset.monitorSn}</span>} />
               <InfoRow label="Size" value={asset.monitorSize} />
+              <InfoRow label="Part #" value={<span className="font-mono text-xs">{asset.monitorPartNumber}</span>} />
             </SectionCard>
             <SectionCard title="Keyboard" icon={Keyboard}>
               <InfoRow label="Make" value={asset.keyboardMake} />
@@ -456,6 +473,7 @@ export function AssetDetailView({ id }: { id: string }) {
               <InfoRow label="Make" value={asset.mouseMake} />
               <InfoRow label="Model" value={asset.mouseModel} />
               <InfoRow label="Serial" value={<span className="font-mono text-xs">{asset.mouseSn}</span>} />
+              <InfoRow label="Part #" value={<span className="font-mono text-xs">{asset.mousePn}</span>} />
             </SectionCard>
           </div>
         </TabsContent>
@@ -785,6 +803,282 @@ export function AssetDetailView({ id }: { id: string }) {
           </SectionCard>
         </TabsContent>
       </Tabs>
+      </div>
+      <AssetAcquisitionFormPrint asset={asset} />
+    </>
+  )
+}
+
+function AssetAcquisitionFormPrint({ asset }: { asset: any }) {
+  const assignedPerson = asset.assignedTo
+  const departmentName = asset.department?.name || ''
+  const locationName = asset.location?.name || ''
+  
+  // Location mapping
+  const locationNormalized = locationName.toLowerCase()
+  const isHeadOffice = locationNormalized.includes('head office') || locationNormalized.includes('ho')
+  const isKarji = locationNormalized.includes('karji')
+  const isAtelier = locationNormalized.includes('atelier')
+  const isTouchOfOud = locationNormalized.includes('touch of oud') || locationNormalized.includes('touch')
+  const isFlowerDistrict = locationNormalized.includes('flower') || locationNormalized.includes('district')
+  const isFirstPerfumes = locationNormalized.includes('first')
+  const isOtherLocation = !isHeadOffice && !isKarji && !isAtelier && !isTouchOfOud && !isFlowerDistrict && !isFirstPerfumes
+
+  // Type of Purchase mapping
+  const typeNormalized = (asset.assetType?.name || '').toLowerCase()
+  const isDesktop = typeNormalized.includes('desktop')
+  const isLaptop = typeNormalized.includes('laptop')
+  const isMobile = typeNormalized.includes('mobile') || typeNormalized.includes('phone')
+  const isPrinter = typeNormalized.includes('printer')
+  const isSoftware = typeNormalized.includes('software') || typeNormalized.includes('license')
+  const isOtherType = !isDesktop && !isLaptop && !isMobile && !isPrinter && !isSoftware
+
+  // OS mapping
+  const osNormalized = (asset.os || '').toLowerCase()
+  const isWindows = osNormalized.includes('win')
+  const isMac = osNormalized.includes('mac') || osNormalized.includes('osx') || osNormalized.includes('apple')
+  const isLinux = osNormalized.includes('linux') || osNormalized.includes('ubuntu') || osNormalized.includes('debian') || osNormalized.includes('redhat')
+  const isAndroid = osNormalized.includes('android')
+
+  // Request Type mapping
+  const statusNormalized = (asset.status || '').toLowerCase()
+  const isNew = statusNormalized === 'in stock' || statusNormalized === 'in use'
+  const isReplacement = statusNormalized === 'repair' || statusNormalized === 'lost'
+  const isUpgrade = false
+  const isRenewal = false
+
+  return (
+    <div className="hidden print:block text-black bg-white p-8 max-w-4xl mx-auto font-sans text-sm leading-relaxed">
+      {/* Header section with Logo */}
+      <div className="flex justify-between items-start mb-6">
+        <div>
+          <h1 className="text-xl font-bold tracking-wide text-slate-800">MAYLAA INTERNATIONAL TRADING L.L.C.</h1>
+          <h2 className="text-base font-bold text-slate-700 mt-1">IT PURCHASE REQUEST/ACQUISITION FORM</h2>
+        </div>
+        <div className="border border-slate-300 p-2 text-xs font-semibold text-slate-500 rounded">
+          Maylaa International
+        </div>
+      </div>
+
+      <p className="text-xs text-slate-600 mb-6 border-b pb-4">
+        This form must be completed for all hardware and software purchase/acquisition requests. Send the signed
+        form to the Head Office OR E-mail the form to <span className="underline font-semibold">it@maylaainternational.com</span>. All the requests will be processed in
+        the order received.
+      </p>
+
+      {/* User details */}
+      <div className="grid grid-cols-2 gap-y-4 mb-6">
+        <div className="col-span-2 flex items-baseline">
+          <span className="font-semibold whitespace-nowrap mr-2">Name of the person using the hardware/software:</span>
+          <span className="flex-1 border-b border-dotted border-black px-2 font-mono font-medium">{assignedPerson?.fullName || '__________________________________'}</span>
+        </div>
+        <div className="flex items-baseline pr-4">
+          <span className="font-semibold whitespace-nowrap mr-2">Department:</span>
+          <span className="flex-1 border-b border-dotted border-black px-2 font-mono font-medium">{departmentName || '__________'}</span>
+        </div>
+        <div className="flex items-baseline pr-4">
+          <span className="font-semibold whitespace-nowrap mr-2">Emp ID:</span>
+          <span className="flex-1 border-b border-dotted border-black px-2 font-mono font-medium">{assignedPerson?.id ? assignedPerson.id.slice(0, 8).toUpperCase() : '__________'}</span>
+        </div>
+        <div className="col-span-2 flex items-baseline">
+          <span className="font-semibold whitespace-nowrap mr-2">Phone No.:</span>
+          <span className="flex-1 border-b border-dotted border-black px-2 font-mono font-medium">{assignedPerson?.phone || '____________________'}</span>
+        </div>
+      </div>
+
+      {/* Location checkboxes */}
+      <div className="mb-6">
+        <span className="font-semibold block mb-2">Check one from below:</span>
+        <div className="grid grid-cols-4 gap-2 pl-4">
+          <label className="flex items-center gap-2">
+            <input type="checkbox" readOnly checked={isHeadOffice} className="h-4 w-4" />
+            <span>Head Office</span>
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" readOnly checked={isKarji} className="h-4 w-4" />
+            <span>Karji Perfumes</span>
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" readOnly checked={isAtelier} className="h-4 w-4" />
+            <span>Atelier Perfumery</span>
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" readOnly checked={isTouchOfOud} className="h-4 w-4" />
+            <span>Touch Of Oud</span>
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" readOnly checked={isFlowerDistrict} className="h-4 w-4" />
+            <span>Flower District</span>
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" readOnly checked={isFirstPerfumes} className="h-4 w-4" />
+            <span>First Perfumes</span>
+          </label>
+          <label className="flex items-center gap-2 col-span-2">
+            <input type="checkbox" readOnly checked={isOtherLocation} className="h-4 w-4" />
+            <span>Other: <span className="border-b border-black px-1 font-mono">{isOtherLocation ? locationName : '________________'}</span></span>
+          </label>
+        </div>
+        <div className="flex items-baseline mt-2 pl-4">
+          <span className="text-xs text-slate-600 mr-2">Description of Branch / Other:</span>
+          <span className="flex-1 border-b border-dotted border-black font-mono px-2 text-xs">{isOtherLocation ? locationName : ''}</span>
+        </div>
+      </div>
+
+      {/* Type of Purchase */}
+      <div className="mb-6">
+        <span className="font-semibold block mb-2">Type of Purchase (check one):</span>
+        <div className="grid grid-cols-6 gap-2 pl-4">
+          <label className="flex items-center gap-2">
+            <input type="checkbox" readOnly checked={isDesktop} className="h-4 w-4" />
+            <span>Desktop</span>
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" readOnly checked={isPrinter} className="h-4 w-4" />
+            <span>Printer</span>
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" readOnly checked={isLaptop} className="h-4 w-4" />
+            <span>Laptop</span>
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" readOnly checked={isMobile} className="h-4 w-4" />
+            <span>Mobile</span>
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" readOnly checked={isSoftware} className="h-4 w-4" />
+            <span>Software</span>
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" readOnly checked={isOtherType} className="h-4 w-4" />
+            <span>Other</span>
+          </label>
+        </div>
+        <div className="flex items-baseline mt-2 pl-4">
+          <span className="text-xs text-slate-600 mr-2">Description of other:</span>
+          <span className="flex-1 border-b border-dotted border-black font-mono px-2 text-xs">{isOtherType ? asset.assetType?.name : ''}</span>
+        </div>
+      </div>
+
+      {/* Type of OS */}
+      <div className="mb-6">
+        <span className="font-semibold block mb-2">Type of OS (check one):</span>
+        <div className="grid grid-cols-4 gap-2 pl-4">
+          <label className="flex items-center gap-2">
+            <input type="checkbox" readOnly checked={isWindows} className="h-4 w-4" />
+            <span>Windows</span>
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" readOnly checked={isMac} className="h-4 w-4" />
+            <span>Mac OS</span>
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" readOnly checked={isLinux} className="h-4 w-4" />
+            <span>Linux</span>
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" readOnly checked={isAndroid} className="h-4 w-4" />
+            <span>Android</span>
+          </label>
+        </div>
+      </div>
+
+      {/* Type of request */}
+      <div className="mb-6">
+        <span className="font-semibold block mb-2">Type of request (check one):</span>
+        <div className="grid grid-cols-4 gap-2 pl-4">
+          <label className="flex items-center gap-2">
+            <input type="checkbox" readOnly checked={isNew} className="h-4 w-4" />
+            <span>New</span>
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" readOnly checked={isRenewal} className="h-4 w-4" />
+            <span>Renewal</span>
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" readOnly checked={isReplacement} className="h-4 w-4" />
+            <span>Replacement</span>
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" readOnly checked={isUpgrade} className="h-4 w-4" />
+            <span>Upgrade</span>
+          </label>
+        </div>
+      </div>
+
+      {/* Installation Location */}
+      <div className="mb-4 flex items-baseline">
+        <span className="font-semibold whitespace-nowrap mr-2">Location where the hardware/software will be installed:</span>
+        <span className="flex-1 border-b border-dotted border-black px-2 font-mono">{locationName || '__________________________________'}</span>
+      </div>
+
+      {/* Other special info */}
+      <div className="mb-4">
+        <span className="font-semibold block mb-1">Please provide any other information/special needs for the purchase requested:</span>
+        <div className="border-b border-dotted border-black h-6 font-mono px-2">{asset.comments?.slice(0, 100) || ''}</div>
+      </div>
+
+      {/* Justification */}
+      <div className="mb-8">
+        <span className="font-semibold block mb-1">Justification (Please include information about how the computer will be used. If you are requesting high-end specifications, be very explicit about the function that requires and justifies the cost):</span>
+        <div className="border-b border-dotted border-black h-12 font-mono px-2 text-xs">
+          {asset.comments ? asset.comments : 'Standard setup for ' + (assignedPerson?.fullName || 'assigned staff') + ' in ' + (departmentName || 'department') + '.'}
+        </div>
+      </div>
+
+      {/* Signatures */}
+      <div className="grid grid-cols-3 gap-6 mb-8 text-center text-xs">
+        <div>
+          <div className="border-b border-black h-8"></div>
+          <p className="font-semibold mt-1">Staff Signature</p>
+          <p className="text-[10px] text-slate-500">Date: ________________</p>
+        </div>
+        <div>
+          <div className="border-b border-black h-8"></div>
+          <p className="font-semibold mt-1">Manager / HR Signature</p>
+          <p className="text-[10px] text-slate-500">Date: ________________</p>
+        </div>
+        <div>
+          <div className="border-b border-black h-8"></div>
+          <p className="font-semibold mt-1">IT Manager Signature</p>
+          <p className="text-[10px] text-slate-500">Date: ________________</p>
+        </div>
+      </div>
+
+      {/* IT Department Use section */}
+      <div className="border border-dashed border-slate-400 p-4 rounded bg-slate-50/50">
+        <h3 className="font-bold text-center uppercase tracking-wider text-slate-700 mb-4">
+          ------------------ IT Department Use ------------------
+        </h3>
+        <div className="grid grid-cols-2 gap-y-3 text-xs">
+          <div className="flex items-baseline">
+            <span className="font-semibold w-24">Manufacturer:</span>
+            <span className="flex-1 border-b border-slate-300 font-mono px-2 font-medium">{asset.make || '—'}</span>
+          </div>
+          <div className="flex items-baseline">
+            <span className="font-semibold w-24">Model:</span>
+            <span className="flex-1 border-b border-slate-300 font-mono px-2 font-medium">{asset.model || '—'}</span>
+          </div>
+          <div className="flex items-baseline pr-4">
+            <span className="font-semibold w-24">S/n No.:</span>
+            <span className="flex-1 border-b border-slate-300 font-mono px-2 font-medium">{asset.serialNumber || '—'}</span>
+          </div>
+          <div className="flex items-baseline">
+            <span className="font-semibold w-24">IMEI No.:</span>
+            <span className="flex-1 border-b border-slate-300 font-mono px-2 font-medium">{asset.imei1 || '—'}</span>
+          </div>
+          <div className="flex items-baseline">
+            <span className="font-semibold w-32">Date of Purchase:</span>
+            <span className="flex-1 border-b border-slate-300 font-mono px-2 font-medium">
+              {asset.purchaseDate ? new Date(asset.purchaseDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+            </span>
+          </div>
+          <div className="flex items-baseline">
+            <span className="font-semibold w-24">Issued By:</span>
+            <span className="flex-1 border-b border-slate-300 px-2 font-bold text-slate-800">Maylaa International</span>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

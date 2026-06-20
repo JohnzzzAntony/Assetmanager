@@ -7,7 +7,7 @@ import { assetBookingRepo } from '@/lib/repo'
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    const updated = assetBookingRepo.update(id, {
+    const updated = await assetBookingRepo.update(id, {
       status: 'Active',
       checkedOutAt: new Date().toISOString(),
     })

@@ -13,7 +13,7 @@ function csvEscape(value: unknown): string {
 
 export async function GET() {
   try {
-    const { data: assets } = assetRepo.list({ pageSize: 1000 })
+    const { data: assets } = await assetRepo.list({ pageSize: 1000 })
     const headers = ['Asset Tag', 'Type', 'Make', 'Model', 'Model Number', 'Serial Number', 'Status', 'Purchase Date', 'Cost', 'Currency', 'Warranty Expiry', 'OS', 'CPU', 'RAM', 'Storage', 'IMEI 1', 'IMEI 2', 'Assigned To', 'Department', 'Location', 'Tags', 'Created At']
     const rows = assets.map((a) => [
       a.assetTag || '', a.assetType?.name || '', a.make || '', a.model || '', a.modelNumber || '',

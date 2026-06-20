@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
-    const data = savedReportRepo.list()
+    const data = await savedReportRepo.list()
     return NextResponse.json({ data })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     if (!body.name || typeof body.name !== 'string' || !body.name.trim()) {
       return NextResponse.json({ error: 'name is required' }, { status: 400 })
     }
-    const created = savedReportRepo.create({
+    const created = await savedReportRepo.create({
       name: body.name.trim(),
       description: body.description ?? null,
       section: body.section ?? null,

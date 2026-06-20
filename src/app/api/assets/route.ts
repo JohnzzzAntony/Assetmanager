@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
       sortBy: url.searchParams.get('sortBy') || 'createdAt',
       sortDir: (url.searchParams.get('sortDir') || 'desc') as 'asc' | 'desc',
     }
-    const result = assetRepo.list(opts)
+    const result = await assetRepo.list(opts)
     return NextResponse.json(result)
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const created = assetRepo.create(body)
+    const created = await assetRepo.create(body)
     return NextResponse.json(created, { status: 201 })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)

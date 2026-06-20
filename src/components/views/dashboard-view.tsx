@@ -208,7 +208,7 @@ export function DashboardView() {
               </span>
             </div>
             <h2 className="text-2xl font-bold tracking-tight">
-              Welcome back to AssetHub <span className="inline-block animate-fade-in-up">👋</span>
+              Welcome to Maylaa Assets <span className="inline-block animate-fade-in-up">👋</span>
             </h2>
             <p className="text-sm text-muted-foreground max-w-2xl">
               You have <span className="font-semibold text-foreground">{stats.totalAssets}</span> assets across{' '}

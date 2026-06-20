@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic'
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    const data = assetTimelineRepo.getForAsset(id)
+    const data = await assetTimelineRepo.getForAsset(id)
     if (!data) return NextResponse.json({ error: 'Asset not found' }, { status: 404 })
     return NextResponse.json(data)
   } catch (e) {

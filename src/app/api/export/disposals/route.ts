@@ -13,7 +13,7 @@ function csvEscape(value: unknown): string {
 
 export async function GET() {
   try {
-    const disposals = disposalRepo.list()
+    const disposals = await disposalRepo.list()
     const headers = ['Disposal Number', 'Asset Tag', 'Asset', 'Method', 'Reason', 'Disposal Date', 'Residual Value', 'Disposal Cost', 'Net Proceeds', 'Buyer/Recipient', 'Condition', 'Environmental Compliant', 'Certificate #', 'Approved By', 'Approved At', 'Notes']
     const rows = disposals.map((d) => [
       d.disposalNumber || '', d.asset?.assetTag || '', d.asset ? `${d.asset.make || ''} ${d.asset.model || ''}`.trim() : '',

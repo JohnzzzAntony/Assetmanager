@@ -55,11 +55,12 @@ import type {
   AuditItemStatus,
   ExpiryBulkRenewPayload,
   ExpiryBulkRenewResult,
+  ImportAlias,
 } from './types'
 
 // Ensure DB is initialized before any query
-function ensure() {
-  initDb()
+async function ensure() {
+  await initDb()
 }
 
 function row<T = Record<string, unknown>>(r: unknown): T | null {
@@ -75,171 +76,229 @@ function toBool(v: unknown) {
   return v != null && v !== 0 && v !== 'false' && v !== ''
 }
 
+// --- Local cache for reference data to avoid N+1 query overhead ---
+let cache_assetTypes: any = null
+let cache_assetTypes_time = 0
+let cache_departments: any = null
+let cache_departments_time = 0
+let cache_locations: any = null
+let cache_locations_time = 0
+let cache_persons: any = null
+let cache_persons_time = 0
+let cache_dashboardStats: any = null
+let cache_dashboardStats_time = 0
+
+export function clearRepoCache() {
+  cache_assetTypes = null
+  cache_departments = null
+  cache_locations = null
+  cache_persons = null
+  cache_dashboardStats = null
+}
+
 // ============ Asset Types ============
 export const assetTypeRepo = {
-  list(): AssetType[] {
-    ensure()
-    const r = db.prepare(`
+  async list(): AssetType[] {
+    await ensure()
+    const nowTime = Date.now()
+    if (cache_assetTypes && (nowTime - cache_assetTypes_time < 5000)) {
+      return cache_assetTypes
+    }
+    const r = await db.prepare(`
       SELECT at.*, (SELECT COUNT(*) FROM Asset a WHERE a.assetTypeId = at.id) as _count_assets
       FROM AssetType at ORDER BY at.name
     `).all()
-    return rows<AssetType & { _count_assets: number }>(r).map((t) => ({
+    const result = rows<AssetType & { _count_assets: number }>(r).map((t) => ({
       ...t,
       _count: { assets: t._count_assets },
     }))
+    cache_assetTypes = result
+    cache_assetTypes_time = nowTime
+    return result
   },
-  get(id: string): AssetType | null {
-    ensure()
-    return row<AssetType>(db.prepare('SELECT * FROM AssetType WHERE id = ?').get(id))
+  async get(id: string): AssetType | null {
+    await ensure()
+    return row<AssetType>(await db.prepare('SELECT * FROM AssetType WHERE id = ?').get(id))
   },
-  create(data: Partial<AssetType>): AssetType {
-    ensure()
+  async create(data: Partial<AssetType>): AssetType {
+    await ensure()
+    clearRepoCache()
     const id = generateId()
     const now = new Date().toISOString()
-    db.prepare(
+    await db.prepare(
       'INSERT INTO AssetType (id, name, description, icon, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)'
     ).run(id, data.name, data.description ?? null, data.icon ?? null, now, now)
-    return this.get(id)!
+    return await this.get(id)!
   },
-  update(id: string, data: Partial<AssetType>): AssetType | null {
-    ensure()
+  async update(id: string, data: Partial<AssetType>): AssetType | null {
+    await ensure()
+    clearRepoCache()
     const now = new Date().toISOString()
-    const cur = this.get(id)
+    const cur = await this.get(id)
     if (!cur) return null
-    db.prepare(
+    await db.prepare(
       'UPDATE AssetType SET name = ?, description = ?, icon = ?, updatedAt = ? WHERE id = ?'
     ).run(data.name ?? cur.name, data.description ?? cur.description, data.icon ?? cur.icon, now, id)
-    return this.get(id)
+    return await this.get(id)
   },
-  delete(id: string): void {
-    ensure()
-    db.prepare('DELETE FROM AssetType WHERE id = ?').run(id)
+  async delete(id: string): void {
+    await ensure()
+    clearRepoCache()
+    await db.prepare('DELETE FROM AssetType WHERE id = ?').run(id)
   },
 }
 
 // ============ Departments ============
 export const departmentRepo = {
-  list(): Department[] {
-    ensure()
-    const r = db.prepare(`
+  async list(): Department[] {
+    await ensure()
+    const nowTime = Date.now()
+    if (cache_departments && (nowTime - cache_departments_time < 5000)) {
+      return cache_departments
+    }
+    const r = await db.prepare(`
       SELECT d.*,
         (SELECT COUNT(*) FROM Asset a WHERE a.departmentId = d.id) as _count_assets,
         (SELECT COUNT(*) FROM Person p WHERE p.departmentId = d.id) as _count_persons
       FROM Department d ORDER BY d.name
     `).all()
-    return rows<Department & { _count_assets: number; _count_persons: number }>(r).map((d) => ({
+    const result = rows<Department & { _count_assets: number; _count_persons: number }>(r).map((d) => ({
       ...d,
       _count: { assets: d._count_assets, persons: d._count_persons },
     }))
+    cache_departments = result
+    cache_departments_time = nowTime
+    return result
   },
-  get(id: string): Department | null {
-    ensure()
-    return row<Department>(db.prepare('SELECT * FROM Department WHERE id = ?').get(id))
+  async get(id: string): Department | null {
+    await ensure()
+    return row<Department>(await db.prepare('SELECT * FROM Department WHERE id = ?').get(id))
   },
-  create(data: Partial<Department>): Department {
-    ensure()
+  async create(data: Partial<Department>): Department {
+    await ensure()
+    clearRepoCache()
     const id = generateId()
     const now = new Date().toISOString()
-    db.prepare(
+    await db.prepare(
       'INSERT INTO Department (id, name, code, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?)'
     ).run(id, data.name, data.code ?? null, now, now)
-    return this.get(id)!
+    return await this.get(id)!
   },
-  update(id: string, data: Partial<Department>): Department | null {
-    ensure()
+  async update(id: string, data: Partial<Department>): Department | null {
+    await ensure()
+    clearRepoCache()
     const now = new Date().toISOString()
-    const cur = this.get(id)
+    const cur = await this.get(id)
     if (!cur) return null
-    db.prepare('UPDATE Department SET name = ?, code = ?, updatedAt = ? WHERE id = ?').run(
+    await db.prepare('UPDATE Department SET name = ?, code = ?, updatedAt = ? WHERE id = ?').run(
       data.name ?? cur.name,
       data.code ?? cur.code,
       now,
       id
     )
-    return this.get(id)
+    return await this.get(id)
   },
-  delete(id: string): void {
-    ensure()
-    db.prepare('DELETE FROM Department WHERE id = ?').run(id)
+  async delete(id: string): void {
+    await ensure()
+    clearRepoCache()
+    await db.prepare('DELETE FROM Department WHERE id = ?').run(id)
   },
 }
 
 // ============ Locations ============
 export const locationRepo = {
-  list(): Location[] {
-    ensure()
-    const r = db.prepare(`
+  async list(): Location[] {
+    await ensure()
+    const nowTime = Date.now()
+    if (cache_locations && (nowTime - cache_locations_time < 5000)) {
+      return cache_locations
+    }
+    const r = await db.prepare(`
       SELECT l.*,
         (SELECT COUNT(*) FROM Asset a WHERE a.locationId = l.id) as _count_assets,
         (SELECT COUNT(*) FROM Person p WHERE p.locationId = l.id) as _count_persons
       FROM Location l ORDER BY l.name
     `).all()
-    return rows<Location & { _count_assets: number; _count_persons: number }>(r).map((l) => ({
+    const result = rows<Location & { _count_assets: number; _count_persons: number }>(r).map((l) => ({
       ...l,
       _count: { assets: l._count_assets, persons: l._count_persons },
     }))
+    cache_locations = result
+    cache_locations_time = nowTime
+    return result
   },
-  get(id: string): Location | null {
-    ensure()
-    return row<Location>(db.prepare('SELECT * FROM Location WHERE id = ?').get(id))
+  async get(id: string): Location | null {
+    await ensure()
+    return row<Location>(await db.prepare('SELECT * FROM Location WHERE id = ?').get(id))
   },
-  create(data: Partial<Location>): Location {
-    ensure()
+  async create(data: Partial<Location>): Location {
+    await ensure()
+    clearRepoCache()
     const id = generateId()
     const now = new Date().toISOString()
-    db.prepare(
+    await db.prepare(
       'INSERT INTO Location (id, name, address, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?)'
     ).run(id, data.name, data.address ?? null, now, now)
-    return this.get(id)!
+    return await this.get(id)!
   },
-  update(id: string, data: Partial<Location>): Location | null {
-    ensure()
+  async update(id: string, data: Partial<Location>): Location | null {
+    await ensure()
+    clearRepoCache()
     const now = new Date().toISOString()
-    const cur = this.get(id)
+    const cur = await this.get(id)
     if (!cur) return null
-    db.prepare('UPDATE Location SET name = ?, address = ?, updatedAt = ? WHERE id = ?').run(
+    await db.prepare('UPDATE Location SET name = ?, address = ?, updatedAt = ? WHERE id = ?').run(
       data.name ?? cur.name,
       data.address ?? cur.address,
       now,
       id
     )
-    return this.get(id)
+    return await this.get(id)
   },
-  delete(id: string): void {
-    ensure()
-    db.prepare('DELETE FROM Location WHERE id = ?').run(id)
+  async delete(id: string): void {
+    await ensure()
+    clearRepoCache()
+    await db.prepare('DELETE FROM Location WHERE id = ?').run(id)
   },
 }
 
 // ============ Persons ============
 export const personRepo = {
-  list(): Person[] {
-    ensure()
-    const r = db.prepare(`
+  async list(): Person[] {
+    await ensure()
+    const nowTime = Date.now()
+    if (cache_persons && (nowTime - cache_persons_time < 5000)) {
+      return cache_persons
+    }
+    const r = await db.prepare(`
       SELECT p.*,
         (SELECT COUNT(*) FROM Asset a WHERE a.assignedToId = p.id) as _count_assets
       FROM Person p ORDER BY p.fullName
     `).all()
-    const depts = departmentRepo.list()
-    const locs = locationRepo.list()
-    return rows<Person & { _count_assets: number }>(r).map((p) => ({
+    const depts = await departmentRepo.list()
+    const locs = await locationRepo.list()
+    const result = rows<Person & { _count_assets: number }>(r).map((p) => ({
       ...p,
       department: depts.find((d) => d.id === p.departmentId) || null,
       location: locs.find((l) => l.id === p.locationId) || null,
       _count: { assets: p._count_assets },
     }))
+    cache_persons = result
+    cache_persons_time = nowTime
+    return result
   },
-  get(id: string): Person | null {
-    ensure()
-    const p = row<Person>(db.prepare('SELECT * FROM Person WHERE id = ?').get(id))
+  async get(id: string): Person | null {
+    await ensure()
+    const p = row<Person>(await db.prepare('SELECT * FROM Person WHERE id = ?').get(id))
     if (!p) return null
     return p
   },
-  create(data: Partial<Person>): Person {
-    ensure()
+  async create(data: Partial<Person>): Person {
+    await ensure()
+    clearRepoCache()
     const id = generateId()
     const now = new Date().toISOString()
-    db.prepare(
+    await db.prepare(
       `INSERT INTO Person (id, fullName, email, phone, role, departmentId, locationId, createdAt, updatedAt)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
@@ -253,14 +312,15 @@ export const personRepo = {
       now,
       now
     )
-    return this.get(id)!
+    return await this.get(id)!
   },
-  update(id: string, data: Partial<Person>): Person | null {
-    ensure()
+  async update(id: string, data: Partial<Person>): Person | null {
+    await ensure()
+    clearRepoCache()
     const now = new Date().toISOString()
-    const cur = this.get(id)
+    const cur = await this.get(id)
     if (!cur) return null
-    db.prepare(
+    await db.prepare(
       `UPDATE Person SET fullName = ?, email = ?, phone = ?, role = ?, departmentId = ?, locationId = ?, updatedAt = ? WHERE id = ?`
     ).run(
       data.fullName ?? cur.fullName,
@@ -272,11 +332,12 @@ export const personRepo = {
       now,
       id
     )
-    return this.get(id)
+    return await this.get(id)
   },
-  delete(id: string): void {
-    ensure()
-    db.prepare('DELETE FROM Person WHERE id = ?').run(id)
+  async delete(id: string): void {
+    await ensure()
+    clearRepoCache()
+    await db.prepare('DELETE FROM Person WHERE id = ?').run(id)
   },
 }
 
@@ -313,23 +374,23 @@ const SORT_COLUMNS: Record<string, string> = {
   person: 'p.fullName',
 }
 
-function attachAssetRelations<T extends Asset>(asset: T): T {
+async function attachAssetRelations<T extends Asset>(asset: T): Promise<T> {
   if (!asset) return asset
-  const types = assetTypeRepo.list()
-  const depts = departmentRepo.list()
-  const locs = locationRepo.list()
-  const persons = personRepo.list()
+  const types = await assetTypeRepo.list()
+  const depts = await departmentRepo.list()
+  const locs = await locationRepo.list()
+  const persons = await personRepo.list()
   asset.assetType = types.find((t) => t.id === asset.assetTypeId) || undefined
   asset.department = depts.find((d) => d.id === asset.departmentId) || null
   asset.location = locs.find((l) => l.id === asset.locationId) || null
   asset.assignedTo = persons.find((p) => p.id === asset.assignedToId) || null
-  asset.tags = assetTagRepo.listForAsset(asset.id)
+  asset.tags = await assetTagRepo.listForAsset(asset.id)
   return asset
 }
 
 export const assetRepo = {
-  list(opts: AssetQueryOpts = {}): { data: Asset[]; total: number; page: number; pageSize: number } {
-    ensure()
+  async list(opts: AssetQueryOpts = {}): { data: Asset[]; total: number; page: number; pageSize: number } {
+    await ensure()
     const page = opts.page || 1
     const pageSize = Math.min(opts.pageSize || 20, 100)
     const offset = (page - 1) * pageSize
@@ -388,7 +449,7 @@ export const assetRepo = {
     }
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
 
-    const countRow = db
+    const countRow = await db
       .prepare(
         `SELECT COUNT(*) as c FROM Asset a
          LEFT JOIN Person p ON a.assignedToId = p.id
@@ -397,7 +458,7 @@ export const assetRepo = {
       .get(...params) as { c: number }
     const total = countRow?.c || 0
 
-    const r = db
+    const r = await db
       .prepare(
         `SELECT a.*, t.name as typeName, d.name as deptName, l.name as locName, p.fullName as personName
          FROM Asset a
@@ -411,36 +472,39 @@ export const assetRepo = {
       )
       .all(...params, pageSize, offset)
 
-    const assets = rows<Asset & { typeName?: string; deptName?: string; locName?: string; personName?: string }>(
-      r
-    ).map((a) => {
-      const { typeName, deptName, locName, personName, ...rest } = a
-      return attachAssetRelations({
-        ...rest,
-        assetType: typeName ? ({ id: rest.assetTypeId, name: typeName } as AssetType) : undefined,
-        department: deptName ? ({ id: rest.departmentId!, name: deptName } as Department) : null,
-        location: locName ? ({ id: rest.locationId!, name: locName } as Location) : null,
-        assignedTo: personName ? ({ id: rest.assignedToId!, fullName: personName } as Person) : null,
-      } as Asset)
-    })
+    const assets = await Promise.all(
+      rows<Asset & { typeName?: string; deptName?: string; locName?: string; personName?: string }>(
+        r
+      ).map((a) => {
+        const { typeName, deptName, locName, personName, ...rest } = a
+        return attachAssetRelations({
+          ...rest,
+          assetType: typeName ? ({ id: rest.assetTypeId, name: typeName } as AssetType) : undefined,
+          department: deptName ? ({ id: rest.departmentId!, name: deptName } as Department) : null,
+          location: locName ? ({ id: rest.locationId!, name: locName } as Location) : null,
+          assignedTo: personName ? ({ id: rest.assignedToId!, fullName: personName } as Person) : null,
+        } as Asset)
+      })
+    )
 
     return { data: assets, total, page, pageSize }
   },
 
-  get(id: string): Asset | null {
-    ensure()
-    const a = row<Asset>(db.prepare('SELECT * FROM Asset WHERE id = ?').get(id))
+  async get(id: string): Asset | null {
+    await ensure()
+    const a = row<Asset>(await db.prepare('SELECT * FROM Asset WHERE id = ?').get(id))
     if (!a) return null
-    attachAssetRelations(a)
-    a.images = imageRepo.listForAsset(id)
-    a.history = historyRepo.listForAsset(id)
-    a.tags = assetTagRepo.listForAsset(id)
+    await attachAssetRelations(a)
+    a.images = await imageRepo.listForAsset(id)
+    a.history = await historyRepo.listForAsset(id)
+    a.tags = await assetTagRepo.listForAsset(id)
     a._count = { images: a.images.length, history: a.history.length }
     return a
   },
 
-  create(data: Record<string, unknown>): Asset {
-    ensure()
+  async create(data: Record<string, unknown>): Asset {
+    await ensure()
+    clearRepoCache()
     const id = generateId()
     const now = new Date().toISOString()
     const cols = [
@@ -450,6 +514,9 @@ export const assetRepo = {
       'monitorMake', 'monitorModel', 'monitorSn', 'monitorSize',
       'keyboardMake', 'keyboardModel', 'keyboardSn',
       'mouseMake', 'mouseModel', 'mouseSn',
+      'computerName', 'manufactureYear', 'mousePn', 'monitorPartNumber', 'ipAddress', 'tonersModel',
+      'deviceType', 'qty', 'barcodeScannerModel', 'barcodeScannerSn', 'scaleMachineIpAddress',
+      'hddInstalledDate', 'hddInstalledDate2',
       'assignedToId', 'departmentId', 'locationId', 'comments', 'createdAt', 'updatedAt',
     ]
     const vals = [
@@ -489,6 +556,19 @@ export const assetRepo = {
       data.mouseMake ?? null,
       data.mouseModel ?? null,
       data.mouseSn ?? null,
+      data.computerName ?? null,
+      data.manufactureYear ?? null,
+      data.mousePn ?? null,
+      data.monitorPartNumber ?? null,
+      data.ipAddress ?? null,
+      data.tonersModel ?? null,
+      data.deviceType ?? null,
+      data.qty ?? null,
+      data.barcodeScannerModel ?? null,
+      data.barcodeScannerSn ?? null,
+      data.scaleMachineIpAddress ?? null,
+      data.hddInstalledDate ?? null,
+      data.hddInstalledDate2 ?? null,
       data.assignedToId ?? null,
       data.departmentId ?? null,
       data.locationId ?? null,
@@ -497,12 +577,12 @@ export const assetRepo = {
       now,
     ]
     const placeholders = cols.map(() => '?').join(', ')
-    db.prepare(`INSERT INTO Asset (${cols.join(', ')}) VALUES (${placeholders})`).run(...vals)
+    await db.prepare(`INSERT INTO Asset (${cols.join(', ')}) VALUES (${placeholders})`).run(...vals)
 
     // If assigned, create history
     if (data.assignedToId || data.departmentId || data.locationId) {
       const histId = generateId()
-      db.prepare(
+      await db.prepare(
         `INSERT INTO AssignmentHistory (id, assetId, personId, departmentId, locationId, assignedOn, reason, action, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).run(
         histId,
@@ -516,13 +596,14 @@ export const assetRepo = {
         now
       )
     }
-    logAssetActivity('asset.created', id, `Created asset ${data.assetTag || data.serialNumber || id.slice(0, 8)}`)
-    return this.get(id)!
+    await logAssetActivity('asset.created', id, `Created asset ${data.assetTag || data.serialNumber || id.slice(0, 8)}`)
+    return await this.get(id)!
   },
 
-  update(id: string, data: Record<string, unknown>): Asset | null {
-    ensure()
-    const cur = this.get(id)
+  async update(id: string, data: Record<string, unknown>): Asset | null {
+    await ensure()
+    clearRepoCache()
+    const cur = await this.get(id)
     if (!cur) return null
     const now = new Date().toISOString()
     const updatable: Record<string, string> = {
@@ -561,6 +642,19 @@ export const assetRepo = {
       mouseMake: 'mouseMake',
       mouseModel: 'mouseModel',
       mouseSn: 'mouseSn',
+      computerName: 'computerName',
+      manufactureYear: 'manufactureYear',
+      mousePn: 'mousePn',
+      monitorPartNumber: 'monitorPartNumber',
+      ipAddress: 'ipAddress',
+      tonersModel: 'tonersModel',
+      deviceType: 'deviceType',
+      qty: 'qty',
+      barcodeScannerModel: 'barcodeScannerModel',
+      barcodeScannerSn: 'barcodeScannerSn',
+      scaleMachineIpAddress: 'scaleMachineIpAddress',
+      hddInstalledDate: 'hddInstalledDate',
+      hddInstalledDate2: 'hddInstalledDate2',
       assignedToId: 'assignedToId',
       departmentId: 'departmentId',
       locationId: 'locationId',
@@ -577,72 +671,75 @@ export const assetRepo = {
     if (sets.length === 0) return cur
     sets.push('updatedAt = ?')
     vals.push(now, id)
-    db.prepare(`UPDATE Asset SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
-    return this.get(id)
+    await db.prepare(`UPDATE Asset SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
+    return await this.get(id)
   },
 
-  delete(id: string): void {
-    ensure()
-    db.prepare('DELETE FROM Asset WHERE id = ?').run(id)
+  async delete(id: string): void {
+    await ensure()
+    clearRepoCache()
+    await db.prepare('DELETE FROM Asset WHERE id = ?').run(id)
   },
 
   // ===== Bulk operations =====
-  bulkSetStatus(ids: string[], status: string): number {
-    ensure()
+  async bulkSetStatus(ids: string[], status: string): number {
+    await ensure()
+    clearRepoCache()
     if (!ids.length) return 0
     const now = new Date().toISOString()
     const placeholders = ids.map(() => '?').join(',')
-    const info = db.prepare(`UPDATE Asset SET status = ?, updatedAt = ? WHERE id IN (${placeholders})`).run(status, now, ...ids)
+    const info = await db.prepare(`UPDATE Asset SET status = ?, updatedAt = ? WHERE id IN (${placeholders})`).run(status, now, ...ids)
     for (const id of ids) {
-      logAssetActivity('asset.updated', id, `Bulk: status changed to ${status}`)
+      await logAssetActivity('asset.updated', id, `Bulk: status changed to ${status}`)
     }
     return info.changes
   },
 
-  bulkDelete(ids: string[]): number {
-    ensure()
+  async bulkDelete(ids: string[]): number {
+    await ensure()
+    clearRepoCache()
     if (!ids.length) return 0
     const placeholders = ids.map(() => '?').join(',')
     for (const id of ids) {
-      logAssetActivity('asset.deleted', id, `Bulk: deleted asset`)
+      await logAssetActivity('asset.deleted', id, `Bulk: deleted asset`)
     }
-    const info = db.prepare(`DELETE FROM Asset WHERE id IN (${placeholders})`).run(...ids)
+    const info = await db.prepare(`DELETE FROM Asset WHERE id IN (${placeholders})`).run(...ids)
     return info.changes
   },
 
-  bulkAssignTag(ids: string[], tagId: string): number {
-    ensure()
+  async bulkAssignTag(ids: string[], tagId: string): number {
+    await ensure()
     if (!ids.length) return 0
     const now = new Date().toISOString()
-    const tag = assetTagRepo.get(tagId)
+    const tag = await assetTagRepo.get(tagId)
     if (!tag) return 0
-    const ins = db.prepare('INSERT OR IGNORE INTO AssetTagLink (id, assetId, tagId, createdAt) VALUES (?, ?, ?, ?)')
+    const ins = await db.prepare('INSERT OR IGNORE INTO AssetTagLink (id, assetId, tagId, createdAt) VALUES (?, ?, ?, ?)')
     let added = 0
     for (const id of ids) {
-      const before = (db.prepare('SELECT COUNT(*) as c FROM AssetTagLink WHERE assetId = ? AND tagId = ?').get(id, tagId) as { c: number }).c
+      const before = (await db.prepare('SELECT COUNT(*) as c FROM AssetTagLink WHERE assetId = ? AND tagId = ?').get(id, tagId) as { c: number }).c
       ins.run(generateId(), id, tagId, now)
-      const after = (db.prepare('SELECT COUNT(*) as c FROM AssetTagLink WHERE assetId = ? AND tagId = ?').get(id, tagId) as { c: number }).c
+      const after = (await db.prepare('SELECT COUNT(*) as c FROM AssetTagLink WHERE assetId = ? AND tagId = ?').get(id, tagId) as { c: number }).c
       if (after > before) added++
-      logAssetActivity('tag.attached', id, `Bulk: tagged with ${tag.name}`)
+      await logAssetActivity('tag.attached', id, `Bulk: tagged with ${tag.name}`)
     }
     return added
   },
 
-  bulkRemoveTag(ids: string[], tagId: string): number {
-    ensure()
+  async bulkRemoveTag(ids: string[], tagId: string): number {
+    await ensure()
     if (!ids.length) return 0
-    const tag = assetTagRepo.get(tagId)
+    const tag = await assetTagRepo.get(tagId)
     if (!tag) return 0
     const placeholders = ids.map(() => '?').join(',')
-    const info = db.prepare(`DELETE FROM AssetTagLink WHERE tagId = ? AND assetId IN (${placeholders})`).run(tagId, ...ids)
+    const info = await db.prepare(`DELETE FROM AssetTagLink WHERE tagId = ? AND assetId IN (${placeholders})`).run(tagId, ...ids)
     for (const id of ids) {
-      logAssetActivity('tag.detached', id, `Bulk: removed tag ${tag.name}`)
+      await logAssetActivity('tag.detached', id, `Bulk: removed tag ${tag.name}`)
     }
     return info.changes
   },
 
   // ===== Asset lifecycle cost analysis =====
-  lifecycleCostByType(): {
+  async lifecycleCostByType(): {
     assetType: string
     assetCount: number
     purchaseCost: number
@@ -651,9 +748,9 @@ export const assetRepo = {
     residualValue: number
     netCost: number
   }[] {
-    ensure()
+    await ensure()
     // Aggregate purchase cost + maintenance cost by asset type
-    const rows = db.prepare(`
+    const rows = await db.prepare(`
       SELECT
         t.name as assetType,
         COUNT(DISTINCT a.id) as assetCount,
@@ -685,8 +782,8 @@ export const assetRepo = {
   },
 
   // ===== Asset cost-over-time trend =====
-  costTrend(monthsBack = 12): { month: string; purchase: number; maintenance: number; disposal: number }[] {
-    ensure()
+  async costTrend(monthsBack = 12): { month: string; purchase: number; maintenance: number; disposal: number }[] {
+    await ensure()
     const result: Record<string, { purchase: number; maintenance: number; disposal: number }> = {}
     const now = new Date()
     // Initialize last N months
@@ -696,17 +793,17 @@ export const assetRepo = {
       result[key] = { purchase: 0, maintenance: 0, disposal: 0 }
     }
     // Asset purchases
-    const assetRows = db.prepare(`SELECT substr(purchaseDate, 1, 7) as month, COALESCE(SUM(cost), 0) as total FROM Asset WHERE purchaseDate IS NOT NULL GROUP BY month`).all() as { month: string; total: number }[]
+    const assetRows = await db.prepare(`SELECT substr(purchaseDate, 1, 7) as month, COALESCE(SUM(cost), 0) as total FROM Asset WHERE purchaseDate IS NOT NULL GROUP BY month`).all() as { month: string; total: number }[]
     for (const r of assetRows) {
       if (result[r.month]) result[r.month].purchase = r.total
     }
     // Maintenance costs (by scheduledFor date)
-    const maintRows = db.prepare(`SELECT substr(scheduledFor, 1, 7) as month, COALESCE(SUM(cost), 0) as total FROM MaintenanceSchedule WHERE scheduledFor IS NOT NULL AND cost IS NOT NULL GROUP BY month`).all() as { month: string; total: number }[]
+    const maintRows = await db.prepare(`SELECT substr(scheduledFor, 1, 7) as month, COALESCE(SUM(cost), 0) as total FROM MaintenanceSchedule WHERE scheduledFor IS NOT NULL AND cost IS NOT NULL GROUP BY month`).all() as { month: string; total: number }[]
     for (const r of maintRows) {
       if (result[r.month]) result[r.month].maintenance = r.total
     }
     // Disposal costs
-    const dispRows = db.prepare(`SELECT substr(disposalDate, 1, 7) as month, COALESCE(SUM(disposalCost), 0) as total FROM AssetDisposal GROUP BY month`).all() as { month: string; total: number }[]
+    const dispRows = await db.prepare(`SELECT substr(disposalDate, 1, 7) as month, COALESCE(SUM(disposalCost), 0) as total FROM AssetDisposal GROUP BY month`).all() as { month: string; total: number }[]
     for (const r of dispRows) {
       if (result[r.month]) result[r.month].disposal = r.total
     }
@@ -715,18 +812,18 @@ export const assetRepo = {
       .map(([month, v]) => ({ month, ...v }))
   },
 
-  assign(
+  async assign(
     id: string,
     data: { personId?: string; departmentId?: string; locationId?: string; reason?: string; action?: string }
   ): AssignmentHistory | null {
-    ensure()
+    await ensure()
     const now = new Date().toISOString()
     // Close any open assignment
-    db.prepare(
+    await db.prepare(
       `UPDATE AssignmentHistory SET unassignedOn = ? WHERE assetId = ? AND unassignedOn IS NULL`
     ).run(now, id)
     const histId = generateId()
-    db.prepare(
+    await db.prepare(
       `INSERT INTO AssignmentHistory (id, assetId, personId, departmentId, locationId, assignedOn, reason, action, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       histId,
@@ -740,18 +837,18 @@ export const assetRepo = {
       now
     )
     // Update asset assignment
-    db.prepare(
+    await db.prepare(
       `UPDATE Asset SET assignedToId = ?, departmentId = ?, locationId = ?, updatedAt = ? WHERE id = ?`
     ).run(data.personId ?? null, data.departmentId ?? null, data.locationId ?? null, now, id)
-    return historyRepo.get(histId)
+    return await historyRepo.get(histId)
   },
 }
 
 // ============ Assignment History ============
 export const historyRepo = {
-  listForAsset(assetId: string): AssignmentHistory[] {
-    ensure()
-    const r = db
+  async listForAsset(assetId: string): AssignmentHistory[] {
+    await ensure()
+    const r = await db
       .prepare(
         `SELECT h.*, p.fullName as personName, d.name as deptName, l.name as locName
          FROM AssignmentHistory h
@@ -770,15 +867,15 @@ export const historyRepo = {
       })
     )
   },
-  get(id: string): AssignmentHistory | null {
-    ensure()
-    return row<AssignmentHistory>(db.prepare('SELECT * FROM AssignmentHistory WHERE id = ?').get(id))
+  async get(id: string): AssignmentHistory | null {
+    await ensure()
+    return row<AssignmentHistory>(await db.prepare('SELECT * FROM AssignmentHistory WHERE id = ?').get(id))
   },
-  recent(limit = 10): (AssignmentHistory & {
+  async recent(limit = 10): (AssignmentHistory & {
     asset?: { id: string; assetTag?: string | null; make?: string | null; model?: string | null }
   })[] {
-    ensure()
-    const r = db
+    await ensure()
+    const r = await db
       .prepare(
         `SELECT h.*, p.fullName as personName, a.id as assetId, a.assetTag, a.make, a.model
          FROM AssignmentHistory h
@@ -797,21 +894,21 @@ export const historyRepo = {
 
 // ============ Asset Images ============
 export const imageRepo = {
-  listForAsset(assetId: string): AssetImage[] {
-    ensure()
+  async listForAsset(assetId: string): AssetImage[] {
+    await ensure()
     return rows<AssetImage>(
-      db.prepare('SELECT * FROM AssetImage WHERE assetId = ? ORDER BY createdAt DESC').all(assetId)
+      await db.prepare('SELECT * FROM AssetImage WHERE assetId = ? ORDER BY createdAt DESC').all(assetId)
     )
   },
-  get(id: string): AssetImage | null {
-    ensure()
-    return row<AssetImage>(db.prepare('SELECT * FROM AssetImage WHERE id = ?').get(id))
+  async get(id: string): AssetImage | null {
+    await ensure()
+    return row<AssetImage>(await db.prepare('SELECT * FROM AssetImage WHERE id = ?').get(id))
   },
-  create(data: Partial<AssetImage>): AssetImage {
-    ensure()
+  async create(data: Partial<AssetImage>): AssetImage {
+    await ensure()
     const id = generateId()
     const now = new Date().toISOString()
-    db.prepare(
+    await db.prepare(
       `INSERT INTO AssetImage (id, assetId, fileName, filePath, mimeType, fileSize, processedText, ocrStatus, ocrEngine, parsedFields, createdAt, processedAt)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
@@ -828,14 +925,14 @@ export const imageRepo = {
       now,
       data.processedAt ?? null
     )
-    return this.get(id)!
+    return await this.get(id)!
   },
-  update(id: string, data: Partial<AssetImage>): AssetImage | null {
-    ensure()
-    const cur = this.get(id)
+  async update(id: string, data: Partial<AssetImage>): AssetImage | null {
+    await ensure()
+    const cur = await this.get(id)
     if (!cur) return null
     const now = new Date().toISOString()
-    db.prepare(
+    await db.prepare(
       `UPDATE AssetImage SET processedText = ?, ocrStatus = ?, ocrEngine = ?, parsedFields = ?, processedAt = ? WHERE id = ?`
     ).run(
       data.processedText ?? cur.processedText,
@@ -845,21 +942,25 @@ export const imageRepo = {
       data.processedAt ?? now,
       id
     )
-    return this.get(id)
+    return await this.get(id)
   },
-  delete(id: string): void {
-    ensure()
-    db.prepare('DELETE FROM AssetImage WHERE id = ?').run(id)
+  async delete(id: string): void {
+    await ensure()
+    await db.prepare('DELETE FROM AssetImage WHERE id = ?').run(id)
   },
 }
 
 // ============ Dashboard ============
-export function getDashboardStats(): DashboardStats {
-  ensure()
-  const totalRow = db.prepare('SELECT COUNT(*) as c FROM Asset').get() as { c: number }
+export async function getDashboardStats(): Promise<DashboardStats> {
+  await ensure()
+  const nowTime = Date.now()
+  if (cache_dashboardStats && (nowTime - cache_dashboardStats_time < 5000)) {
+    return cache_dashboardStats
+  }
+  const totalRow = await db.prepare('SELECT COUNT(*) as c FROM Asset').get() as { c: number }
   const totalAssets = totalRow.c
 
-  const statusRows = db
+  const statusRows = await db
     .prepare(
       `SELECT status, COUNT(*) as c FROM Asset GROUP BY status`
     )
@@ -867,38 +968,38 @@ export function getDashboardStats(): DashboardStats {
   const statusMap: Record<string, number> = {}
   for (const r of statusRows) statusMap[r.status] = r.c
 
-  const typeRows = db
+  const typeRows = await db
     .prepare(
       `SELECT t.name, COUNT(a.id) as count FROM AssetType t LEFT JOIN Asset a ON a.assetTypeId = t.id GROUP BY t.id ORDER BY count DESC`
     )
     .all() as { name: string; count: number }[]
-  const deptRows = db
+  const deptRows = await db
     .prepare(
       `SELECT d.name, COUNT(a.id) as count FROM Department d LEFT JOIN Asset a ON a.departmentId = d.id GROUP BY d.id ORDER BY count DESC`
     )
     .all() as { name: string; count: number }[]
-  const locRows = db
+  const locRows = await db
     .prepare(
       `SELECT l.name, COUNT(a.id) as count FROM Location l LEFT JOIN Asset a ON a.locationId = l.id GROUP BY l.id ORDER BY count DESC`
     )
     .all() as { name: string; count: number }[]
 
-  const valueRow = db.prepare('SELECT COALESCE(SUM(cost), 0) as v FROM Asset').get() as { v: number }
-  const personsRow = db.prepare('SELECT COUNT(*) as c FROM Person').get() as { c: number }
-  const deptsRow = db.prepare('SELECT COUNT(*) as c FROM Department').get() as { c: number }
-  const locsRow = db.prepare('SELECT COUNT(*) as c FROM Location').get() as { c: number }
+  const valueRow = await db.prepare('SELECT COALESCE(SUM(cost), 0) as v FROM Asset').get() as { v: number }
+  const personsRow = await db.prepare('SELECT COUNT(*) as c FROM Person').get() as { c: number }
+  const deptsRow = await db.prepare('SELECT COUNT(*) as c FROM Department').get() as { c: number }
+  const locsRow = await db.prepare('SELECT COUNT(*) as c FROM Location').get() as { c: number }
 
   // Warranty expiring in 30 days
   const in30 = new Date()
   in30.setDate(in30.getDate() + 30)
   const in30Str = in30.toISOString()
-  const warrantyRow = db
+  const warrantyRow = await db
     .prepare(
       `SELECT COUNT(*) as c FROM Asset WHERE warrantyExpiry IS NOT NULL AND warrantyExpiry <= ? AND warrantyExpiry > ?`
     )
     .get(in30Str, new Date().toISOString()) as { c: number }
 
-  return {
+  const result = {
     totalAssets,
     inUse: statusMap['In Use'] || 0,
     inStock: statusMap['In Stock'] || 0,
@@ -909,32 +1010,35 @@ export function getDashboardStats(): DashboardStats {
     byDepartment: deptRows.filter((r) => r.count > 0),
     byLocation: locRows.filter((r) => r.count > 0),
     byStatus: statusRows.map((r) => ({ status: r.status, count: r.c })),
-    recentActivity: historyRepo.recent(10),
+    recentActivity: await historyRepo.recent(10),
     totalValue: valueRow.v,
     totalPersons: personsRow.c,
     totalDepartments: deptsRow.c,
     totalLocations: locsRow.c,
     warrantyExpiringSoon: warrantyRow.c,
-    vendors: vendorRepo.stats(),
-    procurement: purchaseOrderRepo.stats(),
-    disposals: disposalRepo.stats(),
-    bookings: assetBookingRepo.stats(),
-    tags: assetTagRepo.stats(),
+    vendors: await vendorRepo.stats(),
+    procurement: await purchaseOrderRepo.stats(),
+    disposals: await disposalRepo.stats(),
+    bookings: await assetBookingRepo.stats(),
+    tags: await assetTagRepo.stats(),
   }
+  cache_dashboardStats = result
+  cache_dashboardStats_time = nowTime
+  return result
 }
 
 // ============ Activity Log / Audit Log ============
 export const activityLogRepo = {
-  log(action: string, entityType: string, entityId: string, details?: string, meta?: Record<string, unknown>): void {
-    ensure()
+  async log(action: string, entityType: string, entityId: string, details?: string, meta?: Record<string, unknown>): void {
+    await ensure()
     const id = generateId()
     const now = new Date().toISOString()
-    db.prepare(
+    await db.prepare(
       `INSERT INTO ActivityLog (id, action, entityType, entityId, details, createdAt) VALUES (?, ?, ?, ?, ?, ?)`
     ).run(id, action, entityType, entityId, details ?? null, now)
   },
-  list(opts: { limit?: number; entityType?: string; entityId?: string; action?: string } = {}): ActivityLog[] {
-    ensure()
+  async list(opts: { limit?: number; entityType?: string; entityId?: string; action?: string } = {}): ActivityLog[] {
+    await ensure()
     const limit = Math.min(opts.limit || 100, 500)
     const where: string[] = []
     const params: unknown[] = []
@@ -942,20 +1046,20 @@ export const activityLogRepo = {
     if (opts.entityId) { where.push('entityId = ?'); params.push(opts.entityId) }
     if (opts.action) { where.push('action = ?'); params.push(opts.action) }
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
-    const r = db.prepare(
+    const r = await db.prepare(
       `SELECT * FROM ActivityLog ${whereSql} ORDER BY createdAt DESC LIMIT ?`
     ).all(...params, limit)
     return rows<ActivityLog>(r)
   },
-  listForEntity(entityType: string, entityId: string): ActivityLog[] {
-    return this.list({ entityType, entityId, limit: 50 })
+  async listForEntity(entityType: string, entityId: string): ActivityLog[] {
+    return await this.list({ entityType, entityId, limit: 50 })
   },
-  recent(limit = 20): ActivityLog[] {
-    return this.list({ limit })
+  async recent(limit = 20): ActivityLog[] {
+    return await this.list({ limit })
   },
-  count(): number {
-    ensure()
-    const r = db.prepare('SELECT COUNT(*) as c FROM ActivityLog').get() as { c: number }
+  async count(): number {
+    await ensure()
+    const r = await db.prepare('SELECT COUNT(*) as c FROM ActivityLog').get() as { c: number }
     return r.c
   },
 }
@@ -971,8 +1075,8 @@ export interface MaintenanceQuery {
 }
 
 export const maintenanceRepo = {
-  list(opts: MaintenanceQuery = {}): MaintenanceSchedule[] {
-    ensure()
+  async list(opts: MaintenanceQuery = {}): MaintenanceSchedule[] {
+    await ensure()
     const limit = Math.min(opts.limit || 100, 500)
     const where: string[] = []
     const params: unknown[] = []
@@ -982,7 +1086,7 @@ export const maintenanceRepo = {
     if (opts.from) { where.push('m.scheduledFor >= ?'); params.push(opts.from) }
     if (opts.to) { where.push('m.scheduledFor <= ?'); params.push(opts.to) }
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
-    const r = db.prepare(
+    const r = await db.prepare(
       `SELECT m.*, a.assetTag, a.make, a.model, a.serialNumber, t.name as typeName
        FROM MaintenanceSchedule m
        LEFT JOIN Asset a ON m.assetId = a.id
@@ -1002,18 +1106,18 @@ export const maintenanceRepo = {
       } as Asset,
     }))
   },
-  listForAsset(assetId: string): MaintenanceSchedule[] {
-    return this.list({ assetId, limit: 50 })
+  async listForAsset(assetId: string): MaintenanceSchedule[] {
+    return await this.list({ assetId, limit: 50 })
   },
-  get(id: string): MaintenanceSchedule | null {
-    ensure()
-    return row<MaintenanceSchedule>(db.prepare('SELECT * FROM MaintenanceSchedule WHERE id = ?').get(id))
+  async get(id: string): MaintenanceSchedule | null {
+    await ensure()
+    return row<MaintenanceSchedule>(await db.prepare('SELECT * FROM MaintenanceSchedule WHERE id = ?').get(id))
   },
-  create(data: Partial<MaintenanceSchedule>): MaintenanceSchedule {
-    ensure()
+  async create(data: Partial<MaintenanceSchedule>): MaintenanceSchedule {
+    await ensure()
     const id = generateId()
     const now = new Date().toISOString()
-    db.prepare(
+    await db.prepare(
       `INSERT INTO MaintenanceSchedule (id, assetId, type, title, description, scheduledFor, completedAt, status, cost, performedBy, notes, createdAt, updatedAt)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
@@ -1032,14 +1136,14 @@ export const maintenanceRepo = {
       now
     )
     activityLogRepo.log('maintenance.created', 'Asset', data.assetId!, `Scheduled maintenance: ${data.title}`)
-    return this.get(id)!
+    return await this.get(id)!
   },
-  update(id: string, data: Partial<MaintenanceSchedule>): MaintenanceSchedule | null {
-    ensure()
-    const cur = this.get(id)
+  async update(id: string, data: Partial<MaintenanceSchedule>): MaintenanceSchedule | null {
+    await ensure()
+    const cur = await this.get(id)
     if (!cur) return null
     const now = new Date().toISOString()
-    db.prepare(
+    await db.prepare(
       `UPDATE MaintenanceSchedule SET type = ?, title = ?, description = ?, scheduledFor = ?, completedAt = ?, status = ?, cost = ?, performedBy = ?, notes = ?, updatedAt = ? WHERE id = ?`
     ).run(
       data.type ?? cur.type,
@@ -1055,21 +1159,21 @@ export const maintenanceRepo = {
       id
     )
     if (data.status && data.status !== cur.status) {
-      activityLogRepo.log('maintenance.updated', 'Asset', cur.assetId, `Maintenance "${cur.title}" status: ${cur.status} → ${data.status}`)
+      activityLogRepo.log('maintenance.updated', 'Asset', cur.assetId, `Maintenance "${cur.title}" status: ${cur.status} â†’ ${data.status}`)
     }
-    return this.get(id)
+    return await this.get(id)
   },
-  delete(id: string): void {
-    ensure()
-    const m = this.get(id)
-    db.prepare('DELETE FROM MaintenanceSchedule WHERE id = ?').run(id)
+  async delete(id: string): void {
+    await ensure()
+    const m = await this.get(id)
+    await db.prepare('DELETE FROM MaintenanceSchedule WHERE id = ?').run(id)
     if (m) activityLogRepo.log('maintenance.deleted', 'Asset', m.assetId, `Deleted maintenance: ${m.title}`)
   },
-  upcoming(days = 30): MaintenanceSchedule[] {
-    ensure()
+  async upcoming(days = 30): MaintenanceSchedule[] {
+    await ensure()
     const now = new Date()
     const future = new Date(); future.setDate(now.getDate() + days)
-    const r = db.prepare(
+    const r = await db.prepare(
       `SELECT m.*, a.assetTag, a.make, a.model
        FROM MaintenanceSchedule m
        LEFT JOIN Asset a ON m.assetId = a.id
@@ -1082,23 +1186,23 @@ export const maintenanceRepo = {
       asset: { id: m.assetId, assetTag: (m as any).assetTag, make: (m as any).make, model: (m as any).model } as Asset,
     }))
   },
-  stats(): { total: number; scheduled: number; inProgress: number; completed: number; overdue: number } {
-    ensure()
-    const total = (db.prepare('SELECT COUNT(*) as c FROM MaintenanceSchedule').get() as { c: number }).c
-    const scheduled = (db.prepare(`SELECT COUNT(*) as c FROM MaintenanceSchedule WHERE status='Scheduled'`).get() as { c: number }).c
-    const inProgress = (db.prepare(`SELECT COUNT(*) as c FROM MaintenanceSchedule WHERE status='In Progress'`).get() as { c: number }).c
-    const completed = (db.prepare(`SELECT COUNT(*) as c FROM MaintenanceSchedule WHERE status='Completed'`).get() as { c: number }).c
+  async stats(): { total: number; scheduled: number; inProgress: number; completed: number; overdue: number } {
+    await ensure()
+    const total = (await db.prepare('SELECT COUNT(*) as c FROM MaintenanceSchedule').get() as { c: number }).c
+    const scheduled = (await db.prepare(`SELECT COUNT(*) as c FROM MaintenanceSchedule WHERE status='Scheduled'`).get() as { c: number }).c
+    const inProgress = (await db.prepare(`SELECT COUNT(*) as c FROM MaintenanceSchedule WHERE status='In Progress'`).get() as { c: number }).c
+    const completed = (await db.prepare(`SELECT COUNT(*) as c FROM MaintenanceSchedule WHERE status='Completed'`).get() as { c: number }).c
     const now = new Date().toISOString()
-    const overdue = (db.prepare(`SELECT COUNT(*) as c FROM MaintenanceSchedule WHERE status IN ('Scheduled','In Progress') AND scheduledFor < ?`).get(now) as { c: number }).c
+    const overdue = (await db.prepare(`SELECT COUNT(*) as c FROM MaintenanceSchedule WHERE status IN ('Scheduled','In Progress') AND scheduledFor < ?`).get(now) as { c: number }).c
     return { total, scheduled, inProgress, completed, overdue }
   },
 }
 
 // ============ Software Licenses ============
 export const licenseRepo = {
-  list(): SoftwareLicense[] {
-    ensure()
-    const r = db.prepare(`
+  async list(): SoftwareLicense[] {
+    await ensure()
+    const r = await db.prepare(`
       SELECT sl.*,
         (SELECT COUNT(*) FROM AssetLicense al WHERE al.licenseId = sl.id) as _count_alloc
       FROM SoftwareLicense sl ORDER BY sl.name
@@ -1109,15 +1213,15 @@ export const licenseRepo = {
       availableSeats: Math.max(0, l.seatsTotal - l.seatsUsed),
     }))
   },
-  get(id: string): SoftwareLicense | null {
-    ensure()
-    return row<SoftwareLicense>(db.prepare('SELECT * FROM SoftwareLicense WHERE id = ?').get(id))
+  async get(id: string): SoftwareLicense | null {
+    await ensure()
+    return row<SoftwareLicense>(await db.prepare('SELECT * FROM SoftwareLicense WHERE id = ?').get(id))
   },
-  create(data: Partial<SoftwareLicense>): SoftwareLicense {
-    ensure()
+  async create(data: Partial<SoftwareLicense>): SoftwareLicense {
+    await ensure()
     const id = generateId()
     const now = new Date().toISOString()
-    db.prepare(
+    await db.prepare(
       `INSERT INTO SoftwareLicense (id, name, vendor, key, seatsTotal, seatsUsed, purchaseDate, expiryDate, cost, currency, category, notes, createdAt, updatedAt)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
@@ -1128,14 +1232,14 @@ export const licenseRepo = {
       data.currency ?? 'USD', data.category ?? null, data.notes ?? null,
       now, now
     )
-    return this.get(id)!
+    return await this.get(id)!
   },
-  update(id: string, data: Partial<SoftwareLicense>): SoftwareLicense | null {
-    ensure()
-    const cur = this.get(id)
+  async update(id: string, data: Partial<SoftwareLicense>): SoftwareLicense | null {
+    await ensure()
+    const cur = await this.get(id)
     if (!cur) return null
     const now = new Date().toISOString()
-    db.prepare(
+    await db.prepare(
       `UPDATE SoftwareLicense SET name = ?, vendor = ?, key = ?, seatsTotal = ?, seatsUsed = ?, purchaseDate = ?, expiryDate = ?, cost = ?, currency = ?, category = ?, notes = ?, updatedAt = ? WHERE id = ?`
     ).run(
       data.name ?? cur.name, data.vendor ?? cur.vendor, data.key ?? cur.key,
@@ -1146,39 +1250,39 @@ export const licenseRepo = {
       data.currency ?? cur.currency, data.category ?? cur.category, data.notes ?? cur.notes,
       now, id
     )
-    return this.get(id)
+    return await this.get(id)
   },
-  delete(id: string): void {
-    ensure()
-    db.prepare('DELETE FROM SoftwareLicense WHERE id = ?').run(id)
+  async delete(id: string): void {
+    await ensure()
+    await db.prepare('DELETE FROM SoftwareLicense WHERE id = ?').run(id)
   },
-  allocate(licenseId: string, assetId: string): AssetLicense {
-    ensure()
+  async allocate(licenseId: string, assetId: string): AssetLicense {
+    await ensure()
     const id = generateId()
     const now = new Date().toISOString()
-    db.prepare(
+    await db.prepare(
       `INSERT INTO AssetLicense (id, assetId, licenseId, assignedAt, createdAt) VALUES (?, ?, ?, ?, ?)`
     ).run(id, assetId, licenseId, now, now)
-    db.prepare(
+    await db.prepare(
       `UPDATE SoftwareLicense SET seatsUsed = (SELECT COUNT(*) FROM AssetLicense WHERE licenseId = ?), updatedAt = ? WHERE id = ?`
     ).run(licenseId, now, licenseId)
     activityLogRepo.log('license.allocated', 'Asset', assetId, `License allocated to asset`)
-    return row<AssetLicense>(db.prepare('SELECT * FROM AssetLicense WHERE id = ?').get(id))!
+    return row<AssetLicense>(await db.prepare('SELECT * FROM AssetLicense WHERE id = ?').get(id))!
   },
-  deallocate(assetLicenseId: string): void {
-    ensure()
-    const al = row<AssetLicense>(db.prepare('SELECT * FROM AssetLicense WHERE id = ?').get(assetLicenseId))
+  async deallocate(assetLicenseId: string): void {
+    await ensure()
+    const al = row<AssetLicense>(await db.prepare('SELECT * FROM AssetLicense WHERE id = ?').get(assetLicenseId))
     if (!al) return
-    db.prepare('DELETE FROM AssetLicense WHERE id = ?').run(assetLicenseId)
+    await db.prepare('DELETE FROM AssetLicense WHERE id = ?').run(assetLicenseId)
     const now = new Date().toISOString()
-    db.prepare(
+    await db.prepare(
       `UPDATE SoftwareLicense SET seatsUsed = (SELECT COUNT(*) FROM AssetLicense WHERE licenseId = ?), updatedAt = ? WHERE id = ?`
     ).run(al.licenseId, now, al.licenseId)
     activityLogRepo.log('license.deallocated', 'Asset', al.assetId, `License removed from asset`)
   },
-  listForAsset(assetId: string): AssetLicense[] {
-    ensure()
-    const r = db.prepare(
+  async listForAsset(assetId: string): AssetLicense[] {
+    await ensure()
+    const r = await db.prepare(
       `SELECT al.*, sl.name as licName, sl.vendor as licVendor, sl.key as licKey, sl.category as licCategory, sl.expiryDate as licExpiry
        FROM AssetLicense al
        LEFT JOIN SoftwareLicense sl ON al.licenseId = sl.id
@@ -1196,9 +1300,9 @@ export const licenseRepo = {
       } as SoftwareLicense : undefined,
     }))
   },
-  stats(): { total: number; totalSeats: number; usedSeats: number; expiringSoon: number; totalValue: number } {
-    ensure()
-    const r = db.prepare(`
+  async stats(): { total: number; totalSeats: number; usedSeats: number; expiringSoon: number; totalValue: number } {
+    await ensure()
+    const r = await db.prepare(`
       SELECT
         COUNT(*) as total,
         COALESCE(SUM(seatsTotal), 0) as totalSeats,
@@ -1207,7 +1311,7 @@ export const licenseRepo = {
       FROM SoftwareLicense
     `).get() as { total: number; totalSeats: number; usedSeats: number; totalValue: number }
     const in30 = new Date(); in30.setDate(in30.getDate() + 30)
-    const expRow = db.prepare(
+    const expRow = await db.prepare(
       `SELECT COUNT(*) as c FROM SoftwareLicense WHERE expiryDate IS NOT NULL AND expiryDate <= ? AND expiryDate > ?`
     ).get(in30.toISOString(), new Date().toISOString()) as { c: number }
     return {
@@ -1221,9 +1325,9 @@ export const licenseRepo = {
 }
 
 // Hook activity logging into key asset operations
-export function logAssetActivity(action: string, assetId: string, details?: string) {
+export async function logAssetActivity(action: string, assetId: string, details?: string) {
   try {
-    activityLogRepo.log(action, 'Asset', assetId, details)
+    await activityLogRepo.log(action, 'Asset', assetId, details)
   } catch {}
 }
 
@@ -1237,8 +1341,8 @@ export interface CheckoutQuery {
 }
 
 export const checkoutRepo = {
-  list(opts: CheckoutQuery = {}): CheckoutRequest[] {
-    ensure()
+  async list(opts: CheckoutQuery = {}): CheckoutRequest[] {
+    await ensure()
     const limit = Math.min(opts.limit || 200, 500)
     const where: string[] = []
     const params: unknown[] = []
@@ -1247,7 +1351,7 @@ export const checkoutRepo = {
     if (opts.status) { where.push('c.status = ?'); params.push(opts.status) }
     if (opts.requestType) { where.push('c.requestType = ?'); params.push(opts.requestType) }
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
-    const r = db.prepare(
+    const r = await db.prepare(
       `SELECT c.*,
         a.assetTag, a.make, a.model, a.serialNumber, t.name as typeName,
         p.fullName as requesterName, p.email as requesterEmail,
@@ -1284,18 +1388,18 @@ export const checkoutRepo = {
       } as Person : null,
     }))
   },
-  listForAsset(assetId: string): CheckoutRequest[] {
-    return this.list({ assetId, limit: 50 })
+  async listForAsset(assetId: string): CheckoutRequest[] {
+    return await this.list({ assetId, limit: 50 })
   },
-  get(id: string): CheckoutRequest | null {
-    ensure()
-    return row<CheckoutRequest>(db.prepare('SELECT * FROM CheckoutRequest WHERE id = ?').get(id))
+  async get(id: string): CheckoutRequest | null {
+    await ensure()
+    return row<CheckoutRequest>(await db.prepare('SELECT * FROM CheckoutRequest WHERE id = ?').get(id))
   },
-  create(data: Partial<CheckoutRequest>): CheckoutRequest {
-    ensure()
+  async create(data: Partial<CheckoutRequest>): CheckoutRequest {
+    await ensure()
     const id = generateId()
     const now = new Date().toISOString()
-    db.prepare(
+    await db.prepare(
       `INSERT INTO CheckoutRequest (id, assetId, requestedById, requestType, status, reason, requestedStartDate, requestedReturnDate, approvedById, approvedAt, decisionNotes, checkedOutAt, checkedInAt, actualReturnDate, conditionAtReturn, createdAt, updatedAt)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
@@ -1318,14 +1422,14 @@ export const checkoutRepo = {
       now
     )
     activityLogRepo.log('checkout.created', 'Asset', data.assetId!, `New ${data.requestType || 'Checkout'} request`)
-    return this.get(id)!
+    return await this.get(id)!
   },
-  update(id: string, data: Partial<CheckoutRequest>): CheckoutRequest | null {
-    ensure()
-    const cur = this.get(id)
+  async update(id: string, data: Partial<CheckoutRequest>): CheckoutRequest | null {
+    await ensure()
+    const cur = await this.get(id)
     if (!cur) return null
     const now = new Date().toISOString()
-    db.prepare(
+    await db.prepare(
       `UPDATE CheckoutRequest SET status = ?, reason = ?, requestedReturnDate = ?, approvedById = ?, approvedAt = ?, decisionNotes = ?, checkedOutAt = ?, checkedInAt = ?, actualReturnDate = ?, conditionAtReturn = ?, updatedAt = ? WHERE id = ?`
     ).run(
       data.status ?? cur.status,
@@ -1342,15 +1446,15 @@ export const checkoutRepo = {
       id
     )
     if (data.status && data.status !== cur.status) {
-      activityLogRepo.log('checkout.updated', 'Asset', cur.assetId, `Checkout request status: ${cur.status} → ${data.status}`)
+      activityLogRepo.log('checkout.updated', 'Asset', cur.assetId, `Checkout request status: ${cur.status} â†’ ${data.status}`)
     }
-    return this.get(id)
+    return await this.get(id)
   },
-  delete(id: string): void {
-    ensure()
-    db.prepare('DELETE FROM CheckoutRequest WHERE id = ?').run(id)
+  async delete(id: string): void {
+    await ensure()
+    await db.prepare('DELETE FROM CheckoutRequest WHERE id = ?').run(id)
   },
-  approve(id: string, approverId: string, notes?: string): CheckoutRequest | null {
+  async approve(id: string, approverId: string, notes?: string): CheckoutRequest | null {
     return this.update(id, {
       status: 'Approved',
       approvedById: approverId,
@@ -1358,7 +1462,7 @@ export const checkoutRepo = {
       decisionNotes: notes,
     })
   },
-  reject(id: string, approverId: string, notes?: string): CheckoutRequest | null {
+  async reject(id: string, approverId: string, notes?: string): CheckoutRequest | null {
     return this.update(id, {
       status: 'Rejected',
       approvedById: approverId,
@@ -1366,13 +1470,13 @@ export const checkoutRepo = {
       decisionNotes: notes,
     })
   },
-  checkOut(id: string): CheckoutRequest | null {
+  async checkOut(id: string): CheckoutRequest | null {
     return this.update(id, {
       status: 'Checked Out',
       checkedOutAt: new Date().toISOString(),
     })
   },
-  checkIn(id: string, condition?: string): CheckoutRequest | null {
+  async checkIn(id: string, condition?: string): CheckoutRequest | null {
     return this.update(id, {
       status: 'Checked In',
       checkedInAt: new Date().toISOString(),
@@ -1380,15 +1484,15 @@ export const checkoutRepo = {
       conditionAtReturn: condition,
     })
   },
-  stats(): { total: number; pending: number; approved: number; checkedOut: number; overdue: number; rejected: number } {
-    ensure()
-    const total = (db.prepare('SELECT COUNT(*) as c FROM CheckoutRequest').get() as { c: number }).c
-    const pending = (db.prepare(`SELECT COUNT(*) as c FROM CheckoutRequest WHERE status='Pending'`).get() as { c: number }).c
-    const approved = (db.prepare(`SELECT COUNT(*) as c FROM CheckoutRequest WHERE status='Approved'`).get() as { c: number }).c
-    const checkedOut = (db.prepare(`SELECT COUNT(*) as c FROM CheckoutRequest WHERE status='Checked Out'`).get() as { c: number }).c
-    const rejected = (db.prepare(`SELECT COUNT(*) as c FROM CheckoutRequest WHERE status='Rejected'`).get() as { c: number }).c
+  async stats(): { total: number; pending: number; approved: number; checkedOut: number; overdue: number; rejected: number } {
+    await ensure()
+    const total = (await db.prepare('SELECT COUNT(*) as c FROM CheckoutRequest').get() as { c: number }).c
+    const pending = (await db.prepare(`SELECT COUNT(*) as c FROM CheckoutRequest WHERE status='Pending'`).get() as { c: number }).c
+    const approved = (await db.prepare(`SELECT COUNT(*) as c FROM CheckoutRequest WHERE status='Approved'`).get() as { c: number }).c
+    const checkedOut = (await db.prepare(`SELECT COUNT(*) as c FROM CheckoutRequest WHERE status='Checked Out'`).get() as { c: number }).c
+    const rejected = (await db.prepare(`SELECT COUNT(*) as c FROM CheckoutRequest WHERE status='Rejected'`).get() as { c: number }).c
     const now = new Date().toISOString()
-    const overdue = (db.prepare(
+    const overdue = (await db.prepare(
       `SELECT COUNT(*) as c FROM CheckoutRequest WHERE status='Checked Out' AND requestedReturnDate IS NOT NULL AND requestedReturnDate < ?`
     ).get(now) as { c: number }).c
     return { total, pending, approved, checkedOut, overdue, rejected }
@@ -1397,9 +1501,9 @@ export const checkoutRepo = {
 
 // ============ Depreciation Rules & Calculations ============
 export const depreciationRepo = {
-  list(): DepreciationRule[] {
-    ensure()
-    const r = db.prepare(`
+  async list(): DepreciationRule[] {
+    await ensure()
+    const r = await db.prepare(`
       SELECT d.*, t.name as typeName
       FROM DepreciationRule d
       LEFT JOIN AssetType t ON d.assetTypeId = t.id
@@ -1411,25 +1515,25 @@ export const depreciationRepo = {
       assetType: (d as any).typeName ? { id: d.assetTypeId!, name: (d as any).typeName } : null,
     }))
   },
-  get(id: string): DepreciationRule | null {
-    ensure()
-    const r = row<DepreciationRule & { typeName?: string }>(db.prepare(`
+  async get(id: string): DepreciationRule | null {
+    await ensure()
+    const r = row<DepreciationRule & { typeName?: string }>(await db.prepare(`
       SELECT d.*, t.name as typeName FROM DepreciationRule d
       LEFT JOIN AssetType t ON d.assetTypeId = t.id WHERE d.id = ?
     `).get(id))
     if (!r) return null
     return { ...r, isActive: Boolean((r as any).isActive), assetType: (r as any).typeName ? { id: r.assetTypeId!, name: (r as any).typeName } : null }
   },
-  findByAssetType(assetTypeId: string): DepreciationRule | null {
-    ensure()
+  async findByAssetType(assetTypeId: string): DepreciationRule | null {
+    await ensure()
     // Look for asset-type-specific rule first, then fall back to global
-    let r = row<DepreciationRule & { typeName?: string }>(db.prepare(`
+    let r = row<DepreciationRule & { typeName?: string }>(await db.prepare(`
       SELECT d.*, t.name as typeName FROM DepreciationRule d
       LEFT JOIN AssetType t ON d.assetTypeId = t.id
       WHERE d.assetTypeId = ? AND d.isActive = 1
     `).get(assetTypeId))
     if (!r) {
-      r = row<DepreciationRule & { typeName?: string }>(db.prepare(`
+      r = row<DepreciationRule & { typeName?: string }>(await db.prepare(`
         SELECT d.*, NULL as typeName FROM DepreciationRule d
         WHERE d.assetTypeId IS NULL AND d.isActive = 1
         ORDER BY d.createdAt ASC LIMIT 1
@@ -1438,11 +1542,11 @@ export const depreciationRepo = {
     if (!r) return null
     return { ...r, isActive: Boolean((r as any).isActive), assetType: (r as any).typeName ? { id: r.assetTypeId!, name: (r as any).typeName } : null }
   },
-  create(data: Partial<DepreciationRule>): DepreciationRule {
-    ensure()
+  async create(data: Partial<DepreciationRule>): DepreciationRule {
+    await ensure()
     const id = generateId()
     const now = new Date().toISOString()
-    db.prepare(
+    await db.prepare(
       `INSERT INTO DepreciationRule (id, name, assetTypeId, method, usefulLifeYears, salvageValuePercent, description, isActive, createdAt, updatedAt)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
@@ -1450,14 +1554,14 @@ export const depreciationRepo = {
       Number(data.usefulLifeYears ?? 4), Number(data.salvageValuePercent ?? 0),
       data.description ?? null, data.isActive === false ? 0 : 1, now, now
     )
-    return this.get(id)!
+    return await this.get(id)!
   },
-  update(id: string, data: Partial<DepreciationRule>): DepreciationRule | null {
-    ensure()
-    const cur = this.get(id)
+  async update(id: string, data: Partial<DepreciationRule>): DepreciationRule | null {
+    await ensure()
+    const cur = await this.get(id)
     if (!cur) return null
     const now = new Date().toISOString()
-    db.prepare(
+    await db.prepare(
       `UPDATE DepreciationRule SET name = ?, assetTypeId = ?, method = ?, usefulLifeYears = ?, salvageValuePercent = ?, description = ?, isActive = ?, updatedAt = ? WHERE id = ?`
     ).run(
       data.name ?? cur.name, data.assetTypeId ?? cur.assetTypeId,
@@ -1468,13 +1572,13 @@ export const depreciationRepo = {
       data.isActive != null ? (data.isActive ? 1 : 0) : (cur.isActive ? 1 : 0),
       now, id
     )
-    return this.get(id)
+    return await this.get(id)
   },
-  delete(id: string): void {
-    ensure()
-    db.prepare('DELETE FROM DepreciationRule WHERE id = ?').run(id)
+  async delete(id: string): void {
+    await ensure()
+    await db.prepare('DELETE FROM DepreciationRule WHERE id = ?').run(id)
   },
-  calculate(asset: Asset): DepreciationCalc | null {
+  async calculate(asset: Asset): DepreciationCalc | null {
     if (asset.cost == null || asset.cost <= 0 || !asset.purchaseDate) {
       return null
     }
@@ -1541,9 +1645,9 @@ export const depreciationRepo = {
       isFullyDepreciated,
     }
   },
-  calculateForAll(): DepreciationCalc[] {
-    ensure()
-    const assets = db.prepare(`
+  async calculateForAll(): DepreciationCalc[] {
+    await ensure()
+    const assets = await db.prepare(`
       SELECT a.*, t.name as typeName FROM Asset a
       LEFT JOIN AssetType t ON a.assetTypeId = t.id
       WHERE a.cost IS NOT NULL AND a.cost > 0 AND a.purchaseDate IS NOT NULL
@@ -1560,7 +1664,7 @@ export const depreciationRepo = {
     }
     return results
   },
-  stats(): { totalAssets: number; totalPurchaseValue: number; totalCurrentValue: number; totalDepreciation: number; fullyDepreciatedCount: number } {
+  async stats(): { totalAssets: number; totalPurchaseValue: number; totalCurrentValue: number; totalDepreciation: number; fullyDepreciatedCount: number } {
     const calcs = this.calculateForAll()
     return {
       totalAssets: calcs.length,
@@ -1574,24 +1678,24 @@ export const depreciationRepo = {
 
 // ============ Notifications ============
 export const notificationRepo = {
-  list(opts: { limit?: number; onlyUnread?: boolean; type?: string } = {}): AppNotification[] {
-    ensure()
+  async list(opts: { limit?: number; onlyUnread?: boolean; type?: string } = {}): AppNotification[] {
+    await ensure()
     const limit = Math.min(opts.limit || 100, 500)
     const where: string[] = []
     const params: unknown[] = []
     if (opts.onlyUnread) { where.push('isRead = 0') }
     if (opts.type) { where.push('type = ?'); params.push(opts.type) }
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
-    const r = db.prepare(
+    const r = await db.prepare(
       `SELECT * FROM Notification ${whereSql} ORDER BY createdAt DESC LIMIT ?`
     ).all(...params, limit)
     return rows<AppNotification>(r).map((n) => ({ ...n, isRead: Boolean((n as any).isRead) }))
   },
-  create(data: Partial<AppNotification>): AppNotification {
-    ensure()
+  async create(data: Partial<AppNotification>): AppNotification {
+    await ensure()
     const id = generateId()
     const now = new Date().toISOString()
-    db.prepare(
+    await db.prepare(
       `INSERT INTO Notification (id, type, severity, title, message, entityType, entityId, isRead, actionUrl, actionLabel, createdAt, readAt)
        VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, NULL)`
     ).run(
@@ -1599,43 +1703,43 @@ export const notificationRepo = {
       data.entityType ?? null, data.entityId ?? null,
       data.actionUrl ?? null, data.actionLabel ?? null, now
     )
-    return row<AppNotification>(db.prepare('SELECT * FROM Notification WHERE id = ?').get(id))!
+    return row<AppNotification>(await db.prepare('SELECT * FROM Notification WHERE id = ?').get(id))!
   },
-  markRead(id: string): void {
-    ensure()
-    db.prepare('UPDATE Notification SET isRead = 1, readAt = ? WHERE id = ?')
+  async markRead(id: string): void {
+    await ensure()
+    await db.prepare('UPDATE Notification SET isRead = 1, readAt = ? WHERE id = ?')
       .run(new Date().toISOString(), id)
   },
-  markAllRead(): void {
-    ensure()
-    db.prepare('UPDATE Notification SET isRead = 1, readAt = ? WHERE isRead = 0')
+  async markAllRead(): void {
+    await ensure()
+    await db.prepare('UPDATE Notification SET isRead = 1, readAt = ? WHERE isRead = 0')
       .run(new Date().toISOString())
   },
-  delete(id: string): void {
-    ensure()
-    db.prepare('DELETE FROM Notification WHERE id = ?').run(id)
+  async delete(id: string): void {
+    await ensure()
+    await db.prepare('DELETE FROM Notification WHERE id = ?').run(id)
   },
-  clearAll(): void {
-    ensure()
-    db.prepare('DELETE FROM Notification').run()
+  async clearAll(): void {
+    await ensure()
+    await db.prepare('DELETE FROM Notification').run()
   },
-  count(opts: { onlyUnread?: boolean } = {}): number {
-    ensure()
+  async count(opts: { onlyUnread?: boolean } = {}): number {
+    await ensure()
     const sql = opts.onlyUnread ? `SELECT COUNT(*) as c FROM Notification WHERE isRead = 0` : `SELECT COUNT(*) as c FROM Notification`
-    return (db.prepare(sql).get() as { c: number }).c
+    return (await db.prepare(sql).get() as { c: number }).c
   },
   // Generate notifications from system state (warranty, maintenance overdue, license expiring)
-  regenerateSystemNotifications(): { created: number; cleared: number } {
-    ensure()
+  async regenerateSystemNotifications(): { created: number; cleared: number } {
+    await ensure()
     // Clear existing system notifications
-    const cleared = (db.prepare(`DELETE FROM Notification WHERE type IN ('warranty_expiring','maintenance_overdue','license_expiring','license_expired','low_stock')`).run() as any).changes || 0
+    const cleared = (await db.prepare(`DELETE FROM Notification WHERE type IN ('warranty_expiring','maintenance_overdue','license_expiring','license_expired','low_stock')`).run() as any).changes || 0
     let created = 0
     const now = new Date()
     const in30 = new Date(); in30.setDate(now.getDate() + 30)
     const in7 = new Date(); in7.setDate(now.getDate() + 7)
 
     // Warranty expiring
-    const warrantyRows = db.prepare(`
+    const warrantyRows = await db.prepare(`
       SELECT id, assetTag, make, model, warrantyExpiry FROM Asset
       WHERE warrantyExpiry IS NOT NULL AND warrantyExpiry > ? AND warrantyExpiry <= ?
     `).all(now.toISOString(), in30.toISOString()) as any[]
@@ -1654,7 +1758,7 @@ export const notificationRepo = {
     }
 
     // Maintenance overdue
-    const overdueMaint = db.prepare(`
+    const overdueMaint = await db.prepare(`
       SELECT m.id, m.title, m.scheduledFor, a.assetTag, a.make, a.model, a.id as assetId
       FROM MaintenanceSchedule m
       LEFT JOIN Asset a ON m.assetId = a.id
@@ -1675,7 +1779,7 @@ export const notificationRepo = {
     }
 
     // License expiring soon
-    const expiringLic = db.prepare(`
+    const expiringLic = await db.prepare(`
       SELECT id, name, vendor, expiryDate FROM SoftwareLicense
       WHERE expiryDate IS NOT NULL AND expiryDate > ? AND expiryDate <= ?
     `).all(now.toISOString(), in30.toISOString()) as any[]
@@ -1694,7 +1798,7 @@ export const notificationRepo = {
     }
 
     // License already expired
-    const expiredLic = db.prepare(`
+    const expiredLic = await db.prepare(`
       SELECT id, name, vendor, expiryDate FROM SoftwareLicense
       WHERE expiryDate IS NOT NULL AND expiryDate < ?
     `).all(now.toISOString()) as any[]
@@ -1718,9 +1822,9 @@ export const notificationRepo = {
 
 // ============ Vendors ============
 export const vendorRepo = {
-  list(): Vendor[] {
-    ensure()
-    const r = db.prepare(`
+  async list(): Vendor[] {
+    await ensure()
+    const r = await db.prepare(`
       SELECT v.*,
         (SELECT COUNT(*) FROM PurchaseOrder po WHERE po.vendorId = v.id) as _count_purchaseOrders,
         COALESCE((SELECT SUM(po.totalAmount) FROM PurchaseOrder po WHERE po.vendorId = v.id AND po.status NOT IN ('Draft','Cancelled')), 0) as _sum_totalSpent
@@ -1735,17 +1839,17 @@ export const vendorRepo = {
       _sum: { totalSpent: v._sum_totalSpent },
     }))
   },
-  get(id: string): Vendor | null {
-    ensure()
-    const r = row<Vendor>(db.prepare('SELECT * FROM Vendor WHERE id = ?').get(id))
+  async get(id: string): Vendor | null {
+    await ensure()
+    const r = row<Vendor>(await db.prepare('SELECT * FROM Vendor WHERE id = ?').get(id))
     if (!r) return null
     return { ...r, isActive: toBool(r.isActive), rating: Number(r.rating) || 0 }
   },
-  create(data: Partial<Vendor>): Vendor {
-    ensure()
+  async create(data: Partial<Vendor>): Vendor {
+    await ensure()
     const id = generateId()
     const now = new Date().toISOString()
-    db.prepare(
+    await db.prepare(
       `INSERT INTO Vendor (id, name, category, contactPerson, email, phone, website, address, taxId, paymentTerms, rating, isActive, notes, createdAt, updatedAt)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
@@ -1754,16 +1858,16 @@ export const vendorRepo = {
       data.paymentTerms ?? null, data.rating ?? 0, data.isActive === false ? 0 : 1,
       data.notes ?? null, now, now
     )
-    const v = this.get(id)!
+    const v = await this.get(id)!
     activityLogRepo.log('vendor.created', 'Vendor', id, `Created vendor "${v.name}" (${v.category || 'Uncategorized'})`)
     return v
   },
-  update(id: string, data: Partial<Vendor>): Vendor | null {
-    ensure()
-    const cur = this.get(id)
+  async update(id: string, data: Partial<Vendor>): Vendor | null {
+    await ensure()
+    const cur = await this.get(id)
     if (!cur) return null
     const now = new Date().toISOString()
-    db.prepare(
+    await db.prepare(
       `UPDATE Vendor SET name = ?, category = ?, contactPerson = ?, email = ?, phone = ?, website = ?, address = ?, taxId = ?, paymentTerms = ?, rating = ?, isActive = ?, notes = ?, updatedAt = ? WHERE id = ?`
     ).run(
       data.name ?? cur.name, data.category ?? cur.category, data.contactPerson ?? cur.contactPerson,
@@ -1771,42 +1875,42 @@ export const vendorRepo = {
       data.address ?? cur.address, data.taxId ?? cur.taxId, data.paymentTerms ?? cur.paymentTerms,
       data.rating ?? cur.rating, data.isActive === false ? 0 : 1, data.notes ?? cur.notes, now, id
     )
-    const updated = this.get(id)!
+    const updated = await this.get(id)!
     const changes: string[] = []
-    if (data.name && data.name !== cur.name) changes.push(`name "${cur.name}" → "${data.name}"`)
+    if (data.name && data.name !== cur.name) changes.push(`name "${cur.name}" â†’ "${data.name}"`)
     if (data.category !== undefined && data.category !== cur.category) changes.push(`category changed`)
-    if (data.isActive !== undefined && data.isActive !== cur.isActive) changes.push(`active: ${cur.isActive ? 'Yes' : 'No'} → ${data.isActive ? 'Yes' : 'No'}`)
-    if (data.rating !== undefined && Number(data.rating) !== cur.rating) changes.push(`rating ${cur.rating} → ${data.rating}`)
+    if (data.isActive !== undefined && data.isActive !== cur.isActive) changes.push(`active: ${cur.isActive ? 'Yes' : 'No'} â†’ ${data.isActive ? 'Yes' : 'No'}`)
+    if (data.rating !== undefined && Number(data.rating) !== cur.rating) changes.push(`rating ${cur.rating} â†’ ${data.rating}`)
     activityLogRepo.log('vendor.updated', 'Vendor', id, `Updated vendor "${updated.name}"${changes.length ? ': ' + changes.join(', ') : ''}`)
     return updated
   },
-  delete(id: string): void {
-    ensure()
-    const cur = this.get(id)
-    db.prepare('DELETE FROM Vendor WHERE id = ?').run(id)
+  async delete(id: string): void {
+    await ensure()
+    const cur = await this.get(id)
+    await db.prepare('DELETE FROM Vendor WHERE id = ?').run(id)
     if (cur) activityLogRepo.log('vendor.deleted', 'Vendor', id, `Deleted vendor "${cur.name}"`)
   },
-  stats() {
-    ensure()
-    const total = (db.prepare('SELECT COUNT(*) as c FROM Vendor').get() as { c: number }).c
-    const active = (db.prepare('SELECT COUNT(*) as c FROM Vendor WHERE isActive = 1').get() as { c: number }).c
+  async stats() {
+    await ensure()
+    const total = (await db.prepare('SELECT COUNT(*) as c FROM Vendor').get() as { c: number }).c
+    const active = (await db.prepare('SELECT COUNT(*) as c FROM Vendor WHERE isActive = 1').get() as { c: number }).c
     return { total, active }
   },
 }
 
 // ============ Purchase Orders ============
 export const purchaseOrderRepo = {
-  _attachRelations(po: PurchaseOrder): PurchaseOrder {
+  async _attachRelations(po: PurchaseOrder): PurchaseOrder {
     if (!po) return po
-    const vendor = row<Vendor>(db.prepare('SELECT * FROM Vendor WHERE id = ?').get(po.vendorId))
+    const vendor = row<Vendor>(await db.prepare('SELECT * FROM Vendor WHERE id = ?').get(po.vendorId))
     const requestedBy = po.requestedById
-      ? row<Person>(db.prepare('SELECT * FROM Person WHERE id = ?').get(po.requestedById))
+      ? row<Person>(await db.prepare('SELECT * FROM Person WHERE id = ?').get(po.requestedById))
       : null
     const approvedBy = po.approvedById
-      ? row<Person>(db.prepare('SELECT * FROM Person WHERE id = ?').get(po.approvedById))
+      ? row<Person>(await db.prepare('SELECT * FROM Person WHERE id = ?').get(po.approvedById))
       : null
     const items = rows<PurchaseOrderItem>(
-      db.prepare(`
+      await db.prepare(`
         SELECT poi.*, at.name as _at_name, at.icon as _at_icon, at.description as _at_desc
         FROM PurchaseOrderItem poi
         LEFT JOIN AssetType at ON poi.assetTypeId = at.id
@@ -1826,21 +1930,21 @@ export const purchaseOrderRepo = {
       _count: { items: items.length },
     }
   },
-  list(): PurchaseOrder[] {
-    ensure()
+  async list(): PurchaseOrder[] {
+    await ensure()
     const r = rows<PurchaseOrder>(
-      db.prepare('SELECT * FROM PurchaseOrder ORDER BY orderDate DESC, createdAt DESC').all()
+      await db.prepare('SELECT * FROM PurchaseOrder ORDER BY orderDate DESC, createdAt DESC').all()
     )
     return r.map((po) => this._attachRelations(po))
   },
-  get(id: string): PurchaseOrder | null {
-    ensure()
-    const po = row<PurchaseOrder>(db.prepare('SELECT * FROM PurchaseOrder WHERE id = ?').get(id))
+  async get(id: string): PurchaseOrder | null {
+    await ensure()
+    const po = row<PurchaseOrder>(await db.prepare('SELECT * FROM PurchaseOrder WHERE id = ?').get(id))
     if (!po) return null
     return this._attachRelations(po)
   },
-  create(data: Partial<PurchaseOrder> & { items?: Partial<PurchaseOrderItem>[] }): PurchaseOrder {
-    ensure()
+  async create(data: Partial<PurchaseOrder> & { items?: Partial<PurchaseOrderItem>[] }): PurchaseOrder {
+    await ensure()
     const id = generateId()
     const now = new Date().toISOString()
     const poNumber = data.poNumber || `PO-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000)}`
@@ -1850,7 +1954,7 @@ export const purchaseOrderRepo = {
     const taxAmount = (subtotal * taxRate) / 100
     const shippingCost = Number(data.shippingCost) || 0
     const totalAmount = subtotal + taxAmount + shippingCost
-    db.prepare(
+    await db.prepare(
       `INSERT INTO PurchaseOrder (id, poNumber, vendorId, status, orderDate, expectedDate, receivedDate, subtotal, taxRate, taxAmount, shippingCost, totalAmount, currency, requestedById, approvedById, approvedAt, notes, createdAt, updatedAt)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
@@ -1861,7 +1965,7 @@ export const purchaseOrderRepo = {
     )
     // Insert items
     if (data.items && data.items.length > 0) {
-      const insItem = db.prepare(
+      const insItem = await db.prepare(
         `INSERT INTO PurchaseOrderItem (id, poId, assetTypeId, description, quantity, unitPrice, totalPrice, receivedQuantity, notes, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       for (const it of data.items) {
@@ -1874,13 +1978,13 @@ export const purchaseOrderRepo = {
         )
       }
     }
-    const po = this.get(id)!
-    activityLogRepo.log('po.created', 'PurchaseOrder', id, `Created PO ${po.poNumber} for ${po.vendor?.name || 'vendor'} — $${po.totalAmount.toFixed(2)} (${po.status})`)
+    const po = await this.get(id)!
+    activityLogRepo.log('po.created', 'PurchaseOrder', id, `Created PO ${po.poNumber} for ${po.vendor?.name || 'vendor'} â€” $${po.totalAmount.toFixed(2)} (${po.status})`)
     return po
   },
-  update(id: string, data: Partial<PurchaseOrder> & { items?: Partial<PurchaseOrderItem>[] }): PurchaseOrder | null {
-    ensure()
-    const cur = this.get(id)
+  async update(id: string, data: Partial<PurchaseOrder> & { items?: Partial<PurchaseOrderItem>[] }): PurchaseOrder | null {
+    await ensure()
+    const cur = await this.get(id)
     if (!cur) return null
     const now = new Date().toISOString()
     const items = data.items !== undefined ? data.items : cur.items
@@ -1889,7 +1993,7 @@ export const purchaseOrderRepo = {
     const taxAmount = (subtotal * taxRate) / 100
     const shippingCost = data.shippingCost !== undefined ? Number(data.shippingCost) : cur.shippingCost
     const totalAmount = subtotal + taxAmount + shippingCost
-    db.prepare(
+    await db.prepare(
       `UPDATE PurchaseOrder SET vendorId = ?, status = ?, orderDate = ?, expectedDate = ?, receivedDate = ?, subtotal = ?, taxRate = ?, taxAmount = ?, shippingCost = ?, totalAmount = ?, currency = ?, requestedById = ?, approvedById = ?, approvedAt = ?, notes = ?, updatedAt = ? WHERE id = ?`
     ).run(
       data.vendorId ?? cur.vendorId, data.status ?? cur.status, data.orderDate ?? cur.orderDate,
@@ -1900,8 +2004,8 @@ export const purchaseOrderRepo = {
       data.notes ?? cur.notes, now, id
     )
     if (data.items !== undefined) {
-      db.prepare('DELETE FROM PurchaseOrderItem WHERE poId = ?').run(id)
-      const insItem = db.prepare(
+      await db.prepare('DELETE FROM PurchaseOrderItem WHERE poId = ?').run(id)
+      const insItem = await db.prepare(
         `INSERT INTO PurchaseOrderItem (id, poId, assetTypeId, description, quantity, unitPrice, totalPrice, receivedQuantity, notes, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       for (const it of data.items) {
@@ -1914,46 +2018,46 @@ export const purchaseOrderRepo = {
         )
       }
     }
-    const updated = this.get(id)
+    const updated = await this.get(id)
     if (updated) {
       const statusChanged = data.status && data.status !== cur.status
       const detail = statusChanged
-        ? `PO ${updated.poNumber} status: ${cur.status} → ${data.status}`
+        ? `PO ${updated.poNumber} status: ${cur.status} â†’ ${data.status}`
         : `Updated PO ${updated.poNumber}`
       activityLogRepo.log('po.updated', 'PurchaseOrder', id, detail)
     }
     return updated
   },
-  delete(id: string): void {
-    ensure()
-    const cur = this.get(id)
-    db.prepare('DELETE FROM PurchaseOrder WHERE id = ?').run(id)
+  async delete(id: string): void {
+    await ensure()
+    const cur = await this.get(id)
+    await db.prepare('DELETE FROM PurchaseOrder WHERE id = ?').run(id)
     if (cur) activityLogRepo.log('po.deleted', 'PurchaseOrder', id, `Deleted PO ${cur.poNumber}`)
   },
-  listForVendor(vendorId: string): PurchaseOrder[] {
-    ensure()
+  async listForVendor(vendorId: string): PurchaseOrder[] {
+    await ensure()
     const r = rows<PurchaseOrder>(
-      db.prepare('SELECT * FROM PurchaseOrder WHERE vendorId = ? ORDER BY orderDate DESC').all(vendorId)
+      await db.prepare('SELECT * FROM PurchaseOrder WHERE vendorId = ? ORDER BY orderDate DESC').all(vendorId)
     )
     return r.map((po) => this._attachRelations(po))
   },
-  stats() {
-    ensure()
-    const total = (db.prepare('SELECT COUNT(*) as c FROM PurchaseOrder').get() as { c: number }).c
-    const pendingApproval = (db.prepare(`SELECT COUNT(*) as c FROM PurchaseOrder WHERE status = 'Pending Approval'`).get() as { c: number }).c
-    const open = (db.prepare(`SELECT COUNT(*) as c FROM PurchaseOrder WHERE status IN ('Draft','Pending Approval','Approved','Ordered','Partially Received')`).get() as { c: number }).c
-    const received = (db.prepare(`SELECT COUNT(*) as c FROM PurchaseOrder WHERE status IN ('Received','Closed')`).get() as { c: number }).c
-    const spent = (db.prepare(`SELECT COALESCE(SUM(totalAmount), 0) as s FROM PurchaseOrder WHERE status NOT IN ('Draft','Cancelled')`).get() as { s: number }).s
+  async stats() {
+    await ensure()
+    const total = (await db.prepare('SELECT COUNT(*) as c FROM PurchaseOrder').get() as { c: number }).c
+    const pendingApproval = (await db.prepare(`SELECT COUNT(*) as c FROM PurchaseOrder WHERE status = 'Pending Approval'`).get() as { c: number }).c
+    const open = (await db.prepare(`SELECT COUNT(*) as c FROM PurchaseOrder WHERE status IN ('Draft','Pending Approval','Approved','Ordered','Partially Received')`).get() as { c: number }).c
+    const received = (await db.prepare(`SELECT COUNT(*) as c FROM PurchaseOrder WHERE status IN ('Received','Closed')`).get() as { c: number }).c
+    const spent = (await db.prepare(`SELECT COALESCE(SUM(totalAmount), 0) as s FROM PurchaseOrder WHERE status NOT IN ('Draft','Cancelled')`).get() as { s: number }).s
     return { totalPOs: total, pendingApproval, open, received, totalSpent: spent }
   },
 }
 
 // ============ Asset Disposals ============
 export const disposalRepo = {
-  _attachRelations(d: AssetDisposal): AssetDisposal {
+  async _attachRelations(d: AssetDisposal): AssetDisposal {
     if (!d) return d
     const asset = row<Asset>(
-      db.prepare(`
+      await db.prepare(`
         SELECT a.*, at.name as _at_name, at.icon as _at_icon
         FROM Asset a LEFT JOIN AssetType at ON a.assetTypeId = at.id
         WHERE a.id = ?
@@ -1963,7 +2067,7 @@ export const disposalRepo = {
       asset.assetType = asset._at_name ? { id: asset.assetTypeId, name: asset._at_name, icon: asset._at_icon } : null
     }
     const approvedBy = d.approvedById
-      ? row<Person>(db.prepare('SELECT * FROM Person WHERE id = ?').get(d.approvedById))
+      ? row<Person>(await db.prepare('SELECT * FROM Person WHERE id = ?').get(d.approvedById))
       : null
     return {
       ...d,
@@ -1975,35 +2079,35 @@ export const disposalRepo = {
       approvedBy: approvedBy || null,
     }
   },
-  list(): AssetDisposal[] {
-    ensure()
+  async list(): AssetDisposal[] {
+    await ensure()
     const r = rows<AssetDisposal>(
-      db.prepare('SELECT * FROM AssetDisposal ORDER BY disposalDate DESC, createdAt DESC').all()
+      await db.prepare('SELECT * FROM AssetDisposal ORDER BY disposalDate DESC, createdAt DESC').all()
     )
     return r.map((d) => this._attachRelations(d))
   },
-  get(id: string): AssetDisposal | null {
-    ensure()
-    const d = row<AssetDisposal>(db.prepare('SELECT * FROM AssetDisposal WHERE id = ?').get(id))
+  async get(id: string): AssetDisposal | null {
+    await ensure()
+    const d = row<AssetDisposal>(await db.prepare('SELECT * FROM AssetDisposal WHERE id = ?').get(id))
     if (!d) return null
     return this._attachRelations(d)
   },
-  listForAsset(assetId: string): AssetDisposal[] {
-    ensure()
+  async listForAsset(assetId: string): AssetDisposal[] {
+    await ensure()
     const r = rows<AssetDisposal>(
-      db.prepare('SELECT * FROM AssetDisposal WHERE assetId = ? ORDER BY disposalDate DESC').all(assetId)
+      await db.prepare('SELECT * FROM AssetDisposal WHERE assetId = ? ORDER BY disposalDate DESC').all(assetId)
     )
     return r.map((d) => this._attachRelations(d))
   },
-  create(data: Partial<AssetDisposal>): AssetDisposal {
-    ensure()
+  async create(data: Partial<AssetDisposal>): AssetDisposal {
+    await ensure()
     const id = generateId()
     const now = new Date().toISOString()
     const disposalNumber = data.disposalNumber || `DISP-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000)}`
     const residualValue = Number(data.residualValue) || 0
     const disposalCost = Number(data.disposalCost) || 0
     const netProceeds = residualValue - disposalCost
-    db.prepare(
+    await db.prepare(
       `INSERT INTO AssetDisposal (id, assetId, disposalNumber, method, reason, disposalDate, residualValue, disposalCost, netProceeds, buyerRecipient, conditionAtDisposal, environmentalCompliant, certificateNumber, approvedById, approvedAt, notes, createdAt, updatedAt)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
@@ -2014,21 +2118,21 @@ export const disposalRepo = {
       data.approvedById ?? null, data.approvedAt ?? null, data.notes ?? null, now, now
     )
     // Mark asset as Retired
-    db.prepare("UPDATE Asset SET status = 'Retired', updatedAt = ? WHERE id = ?").run(now, data.assetId!)
-    const disposal = this.get(id)!
-    activityLogRepo.log('disposal.created', 'AssetDisposal', id, `Disposed asset via ${disposal.method} (net $${netProceeds.toFixed(2)}) — ${disposal.disposalNumber}`)
+    await db.prepare("UPDATE Asset SET status = 'Retired', updatedAt = ? WHERE id = ?").run(now, data.assetId!)
+    const disposal = await this.get(id)!
+    activityLogRepo.log('disposal.created', 'AssetDisposal', id, `Disposed asset via ${disposal.method} (net $${netProceeds.toFixed(2)}) â€” ${disposal.disposalNumber}`)
     activityLogRepo.log('asset.retired', 'Asset', data.assetId!, `Asset retired via disposal ${disposal.disposalNumber} (${disposal.method})`)
     return disposal
   },
-  update(id: string, data: Partial<AssetDisposal>): AssetDisposal | null {
-    ensure()
-    const cur = this.get(id)
+  async update(id: string, data: Partial<AssetDisposal>): AssetDisposal | null {
+    await ensure()
+    const cur = await this.get(id)
     if (!cur) return null
     const now = new Date().toISOString()
     const residualValue = data.residualValue !== undefined ? Number(data.residualValue) : cur.residualValue
     const disposalCost = data.disposalCost !== undefined ? Number(data.disposalCost) : cur.disposalCost
     const netProceeds = residualValue - disposalCost
-    db.prepare(
+    await db.prepare(
       `UPDATE AssetDisposal SET method = ?, reason = ?, disposalDate = ?, residualValue = ?, disposalCost = ?, netProceeds = ?, buyerRecipient = ?, conditionAtDisposal = ?, environmentalCompliant = ?, certificateNumber = ?, approvedById = ?, approvedAt = ?, notes = ?, updatedAt = ? WHERE id = ?`
     ).run(
       data.method ?? cur.method, data.reason ?? cur.reason, data.disposalDate ?? cur.disposalDate,
@@ -2038,85 +2142,85 @@ export const disposalRepo = {
       data.approvedById ?? cur.approvedById, data.approvedAt ?? cur.approvedAt,
       data.notes ?? cur.notes, now, id
     )
-    const updated = this.get(id)
+    const updated = await this.get(id)
     if (updated) {
       const methodChanged = data.method && data.method !== cur.method
-      activityLogRepo.log('disposal.updated', 'AssetDisposal', id, `${methodChanged ? `Method ${cur.method} → ${data.method} — ` : ''}Updated disposal ${updated.disposalNumber}`)
+      activityLogRepo.log('disposal.updated', 'AssetDisposal', id, `${methodChanged ? `Method ${cur.method} â†’ ${data.method} â€” ` : ''}Updated disposal ${updated.disposalNumber}`)
     }
     return updated
   },
-  delete(id: string): void {
-    ensure()
-    const cur = this.get(id)
-    db.prepare('DELETE FROM AssetDisposal WHERE id = ?').run(id)
+  async delete(id: string): void {
+    await ensure()
+    const cur = await this.get(id)
+    await db.prepare('DELETE FROM AssetDisposal WHERE id = ?').run(id)
     if (cur) activityLogRepo.log('disposal.deleted', 'AssetDisposal', id, `Deleted disposal ${cur.disposalNumber}`)
   },
-  stats() {
-    ensure()
-    const total = (db.prepare('SELECT COUNT(*) as c FROM AssetDisposal').get() as { c: number }).c
-    const recovered = (db.prepare(`SELECT COALESCE(SUM(netProceeds), 0) as s FROM AssetDisposal WHERE method IN ('Sold','Trade-in','Recycled')`).get() as { s: number }).s
-    const cost = (db.prepare(`SELECT COALESCE(SUM(disposalCost), 0) as s FROM AssetDisposal`).get() as { s: number }).s
-    const pending = (db.prepare(`SELECT COUNT(*) as c FROM AssetDisposal WHERE approvedById IS NULL`).get() as { c: number }).c
+  async stats() {
+    await ensure()
+    const total = (await db.prepare('SELECT COUNT(*) as c FROM AssetDisposal').get() as { c: number }).c
+    const recovered = (await db.prepare(`SELECT COALESCE(SUM(netProceeds), 0) as s FROM AssetDisposal WHERE method IN ('Sold','Trade-in','Recycled')`).get() as { s: number }).s
+    const cost = (await db.prepare(`SELECT COALESCE(SUM(disposalCost), 0) as s FROM AssetDisposal`).get() as { s: number }).s
+    const pending = (await db.prepare(`SELECT COUNT(*) as c FROM AssetDisposal WHERE approvedById IS NULL`).get() as { c: number }).c
     return { total, totalRecovered: recovered, totalCost: cost, pendingApproval: pending }
   },
 }
 
 // ============ Asset Tags ============
 export const assetTagRepo = {
-  _attachCount(t: AssetTag): AssetTag {
-    const c = (db.prepare('SELECT COUNT(*) as c FROM AssetTagLink WHERE tagId = ?').get(t.id) as { c: number }).c
+  async _attachCount(t: AssetTag): AssetTag {
+    const c = (await db.prepare('SELECT COUNT(*) as c FROM AssetTagLink WHERE tagId = ?').get(t.id) as { c: number }).c
     return { ...t, _count: { assets: c } }
   },
-  list(): AssetTag[] {
-    ensure()
-    const r = rows<AssetTag>(db.prepare('SELECT * FROM AssetTag ORDER BY name COLLATE NOCASE').all())
+  async list(): AssetTag[] {
+    await ensure()
+    const r = rows<AssetTag>(await db.prepare('SELECT * FROM AssetTag ORDER BY name COLLATE NOCASE').all())
     return r.map((t) => this._attachCount(t))
   },
-  get(id: string): AssetTag | null {
-    ensure()
-    const r = row<AssetTag>(db.prepare('SELECT * FROM AssetTag WHERE id = ?').get(id))
+  async get(id: string): AssetTag | null {
+    await ensure()
+    const r = row<AssetTag>(await db.prepare('SELECT * FROM AssetTag WHERE id = ?').get(id))
     if (!r) return null
     return this._attachCount(r)
   },
-  getByName(name: string): AssetTag | null {
-    ensure()
-    const r = row<AssetTag>(db.prepare('SELECT * FROM AssetTag WHERE name = ? COLLATE NOCASE').get(name))
+  async getByName(name: string): AssetTag | null {
+    await ensure()
+    const r = row<AssetTag>(await db.prepare('SELECT * FROM AssetTag WHERE name = ? COLLATE NOCASE').get(name))
     if (!r) return null
     return this._attachCount(r)
   },
-  create(data: Partial<AssetTag>): AssetTag {
-    ensure()
+  async create(data: Partial<AssetTag>): AssetTag {
+    await ensure()
     const id = generateId()
     const now = new Date().toISOString()
-    db.prepare(
+    await db.prepare(
       `INSERT INTO AssetTag (id, name, color, description, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)`
     ).run(id, data.name, data.color || 'slate', data.description ?? null, now, now)
-    const t = this.get(id)!
+    const t = await this.get(id)!
     activityLogRepo.log('tag.created', 'AssetTag', id, `Created tag "${t.name}"`)
     return t
   },
-  update(id: string, data: Partial<AssetTag>): AssetTag | null {
-    ensure()
-    const cur = this.get(id)
+  async update(id: string, data: Partial<AssetTag>): AssetTag | null {
+    await ensure()
+    const cur = await this.get(id)
     if (!cur) return null
     const now = new Date().toISOString()
-    db.prepare(`UPDATE AssetTag SET name = ?, color = ?, description = ?, updatedAt = ? WHERE id = ?`).run(
+    await db.prepare(`UPDATE AssetTag SET name = ?, color = ?, description = ?, updatedAt = ? WHERE id = ?`).run(
       data.name ?? cur.name, data.color ?? cur.color, data.description ?? cur.description, now, id
     )
-    const updated = this.get(id)!
+    const updated = await this.get(id)!
     activityLogRepo.log('tag.updated', 'AssetTag', id, `Updated tag "${updated.name}"`)
     return updated
   },
-  delete(id: string): void {
-    ensure()
-    const cur = this.get(id)
-    db.prepare('DELETE FROM AssetTag WHERE id = ?').run(id)
+  async delete(id: string): void {
+    await ensure()
+    const cur = await this.get(id)
+    await db.prepare('DELETE FROM AssetTag WHERE id = ?').run(id)
     if (cur) activityLogRepo.log('tag.deleted', 'AssetTag', id, `Deleted tag "${cur.name}"`)
   },
-  listForAsset(assetId: string): AssetTag[] {
-    ensure()
+  async listForAsset(assetId: string): AssetTag[] {
+    await ensure()
     const r = rows<AssetTag>(
-      db.prepare(`
+      await db.prepare(`
         SELECT t.* FROM AssetTag t
         JOIN AssetTagLink l ON l.tagId = t.id
         WHERE l.assetId = ?
@@ -2125,37 +2229,37 @@ export const assetTagRepo = {
     )
     return r
   },
-  attachToAsset(assetId: string, tagId: string): void {
-    ensure()
-    const existing = db.prepare('SELECT id FROM AssetTagLink WHERE assetId = ? AND tagId = ?').get(assetId, tagId)
+  async attachToAsset(assetId: string, tagId: string): void {
+    await ensure()
+    const existing = await db.prepare('SELECT id FROM AssetTagLink WHERE assetId = ? AND tagId = ?').get(assetId, tagId)
     if (existing) return
     const id = generateId()
     const now = new Date().toISOString()
-    db.prepare('INSERT INTO AssetTagLink (id, assetId, tagId, createdAt) VALUES (?, ?, ?, ?)').run(id, assetId, tagId, now)
-    const tag = this.get(tagId)
+    await db.prepare('INSERT INTO AssetTagLink (id, assetId, tagId, createdAt) VALUES (?, ?, ?, ?)').run(id, assetId, tagId, now)
+    const tag = await this.get(tagId)
     if (tag) activityLogRepo.log('tag.attached', 'Asset', assetId, `Tagged asset with "${tag.name}"`)
   },
-  detachFromAsset(assetId: string, tagId: string): void {
-    ensure()
-    const tag = this.get(tagId)
-    db.prepare('DELETE FROM AssetTagLink WHERE assetId = ? AND tagId = ?').run(assetId, tagId)
+  async detachFromAsset(assetId: string, tagId: string): void {
+    await ensure()
+    const tag = await this.get(tagId)
+    await db.prepare('DELETE FROM AssetTagLink WHERE assetId = ? AND tagId = ?').run(assetId, tagId)
     if (tag) activityLogRepo.log('tag.detached', 'Asset', assetId, `Removed tag "${tag.name}" from asset`)
   },
-  setAssetTags(assetId: string, tagIds: string[]): void {
-    ensure()
-    db.prepare('DELETE FROM AssetTagLink WHERE assetId = ?').run(assetId)
+  async setAssetTags(assetId: string, tagIds: string[]): void {
+    await ensure()
+    await db.prepare('DELETE FROM AssetTagLink WHERE assetId = ?').run(assetId)
     const now = new Date().toISOString()
-    const ins = db.prepare('INSERT INTO AssetTagLink (id, assetId, tagId, createdAt) VALUES (?, ?, ?, ?)')
+    const ins = await db.prepare('INSERT INTO AssetTagLink (id, assetId, tagId, createdAt) VALUES (?, ?, ?, ?)')
     for (const tid of tagIds) {
       ins.run(generateId(), assetId, tid, now)
     }
   },
-  stats() {
-    ensure()
-    const totalTags = (db.prepare('SELECT COUNT(*) as c FROM AssetTag').get() as { c: number }).c
-    const totalLinks = (db.prepare('SELECT COUNT(*) as c FROM AssetTagLink').get() as { c: number }).c
+  async stats() {
+    await ensure()
+    const totalTags = (await db.prepare('SELECT COUNT(*) as c FROM AssetTag').get() as { c: number }).c
+    const totalLinks = (await db.prepare('SELECT COUNT(*) as c FROM AssetTagLink').get() as { c: number }).c
     const topTags = rows<{ name: string; color: string; c: number }>(
-      db.prepare(`
+      await db.prepare(`
         SELECT t.name, t.color, COUNT(l.id) as c
         FROM AssetTag t LEFT JOIN AssetTagLink l ON l.tagId = t.id
         GROUP BY t.id ORDER BY c DESC LIMIT 5
@@ -2167,10 +2271,10 @@ export const assetTagRepo = {
 
 // ============ Asset Bookings ============
 export const assetBookingRepo = {
-  _attachRelations(b: AssetBooking): AssetBooking {
+  async _attachRelations(b: AssetBooking): AssetBooking {
     if (!b) return b
     const asset = row<Asset>(
-      db.prepare(`
+      await db.prepare(`
         SELECT a.*, at.name as _at_name, at.icon as _at_icon
         FROM Asset a LEFT JOIN AssetType at ON a.assetTypeId = at.id
         WHERE a.id = ?
@@ -2179,14 +2283,14 @@ export const assetBookingRepo = {
     if (asset) {
       asset.assetType = asset._at_name ? { id: asset.assetTypeId, name: asset._at_name, icon: asset._at_icon } : null
     }
-    const bookedBy = row<Person>(db.prepare('SELECT * FROM Person WHERE id = ?').get(b.bookedById))
+    const bookedBy = row<Person>(await db.prepare('SELECT * FROM Person WHERE id = ?').get(b.bookedById))
     const approvedBy = b.approvedById
-      ? row<Person>(db.prepare('SELECT * FROM Person WHERE id = ?').get(b.approvedById))
+      ? row<Person>(await db.prepare('SELECT * FROM Person WHERE id = ?').get(b.approvedById))
       : null
     return { ...b, asset: asset || undefined, bookedBy: bookedBy || null, approvedBy }
   },
-  list(opts: { assetId?: string; status?: string; bookedById?: string; from?: string; to?: string; limit?: number } = {}): AssetBooking[] {
-    ensure()
+  async list(opts: { assetId?: string; status?: string; bookedById?: string; from?: string; to?: string; limit?: number } = {}): AssetBooking[] {
+    await ensure()
     const limit = Math.min(opts.limit || 200, 1000)
     const where: string[] = []
     const params: unknown[] = []
@@ -2197,22 +2301,22 @@ export const assetBookingRepo = {
     if (opts.to) { where.push('startDate <= ?'); params.push(opts.to) }
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
     const r = rows<AssetBooking>(
-      db.prepare(`SELECT * FROM AssetBooking ${whereSql} ORDER BY startDate DESC LIMIT ?`).all(...params, limit)
+      await db.prepare(`SELECT * FROM AssetBooking ${whereSql} ORDER BY startDate DESC LIMIT ?`).all(...params, limit)
     )
     return r.map((b) => this._attachRelations(b))
   },
-  get(id: string): AssetBooking | null {
-    ensure()
-    const b = row<AssetBooking>(db.prepare('SELECT * FROM AssetBooking WHERE id = ?').get(id))
+  async get(id: string): AssetBooking | null {
+    await ensure()
+    const b = row<AssetBooking>(await db.prepare('SELECT * FROM AssetBooking WHERE id = ?').get(id))
     if (!b) return null
     return this._attachRelations(b)
   },
-  listForAsset(assetId: string): AssetBooking[] {
-    return this.list({ assetId, limit: 100 })
+  async listForAsset(assetId: string): AssetBooking[] {
+    return await this.list({ assetId, limit: 100 })
   },
   // Check for overlapping active/approved bookings for the same asset
-  findConflicts(assetId: string, startDate: string, endDate: string, excludeId?: string): AssetBooking[] {
-    ensure()
+  async findConflicts(assetId: string, startDate: string, endDate: string, excludeId?: string): AssetBooking[] {
+    await ensure()
     const params: unknown[] = [assetId, endDate, startDate]
     let excludeClause = ''
     if (excludeId) {
@@ -2220,7 +2324,7 @@ export const assetBookingRepo = {
       params.push(excludeId)
     }
     const r = rows<AssetBooking>(
-      db.prepare(`
+      await db.prepare(`
         SELECT * FROM AssetBooking
         WHERE assetId = ?
           AND status IN ('Pending','Approved','Active')
@@ -2232,11 +2336,11 @@ export const assetBookingRepo = {
     )
     return r.map((b) => this._attachRelations(b))
   },
-  create(data: Partial<AssetBooking>): AssetBooking {
-    ensure()
+  async create(data: Partial<AssetBooking>): AssetBooking {
+    await ensure()
     const id = generateId()
     const now = new Date().toISOString()
-    db.prepare(
+    await db.prepare(
       `INSERT INTO AssetBooking (id, assetId, bookedById, title, purpose, status, startDate, endDate, requestedById, approvedById, approvedAt, decisionNotes, checkedOutAt, checkedInAt, notes, createdAt, updatedAt)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
@@ -2246,13 +2350,13 @@ export const assetBookingRepo = {
       data.decisionNotes ?? null, data.checkedOutAt ?? null, data.checkedInAt ?? null,
       data.notes ?? null, now, now
     )
-    const b = this.get(id)!
-    activityLogRepo.log('booking.created', 'AssetBooking', id, `Booking "${b.title}" for asset ${b.asset?.assetTag || b.assetId} (${b.startDate} → ${b.endDate})`)
+    const b = await this.get(id)!
+    activityLogRepo.log('booking.created', 'AssetBooking', id, `Booking "${b.title}" for asset ${b.asset?.assetTag || b.assetId} (${b.startDate} â†’ ${b.endDate})`)
     return b
   },
-  update(id: string, data: Partial<AssetBooking>): AssetBooking | null {
-    ensure()
-    const cur = this.get(id)
+  async update(id: string, data: Partial<AssetBooking>): AssetBooking | null {
+    await ensure()
+    const cur = await this.get(id)
     if (!cur) return null
     const now = new Date().toISOString()
     const fields = ['title','purpose','status','startDate','endDate','approvedById','approvedAt','decisionNotes','checkedOutAt','checkedInAt','notes']
@@ -2267,64 +2371,64 @@ export const assetBookingRepo = {
     sets.push('updatedAt = ?')
     params.push(now)
     params.push(id)
-    db.prepare(`UPDATE AssetBooking SET ${sets.join(', ')} WHERE id = ?`).run(...params)
-    const updated = this.get(id)!
+    await db.prepare(`UPDATE AssetBooking SET ${sets.join(', ')} WHERE id = ?`).run(...params)
+    const updated = await this.get(id)!
     const statusChanged = data.status && data.status !== cur.status
-    activityLogRepo.log('booking.updated', 'AssetBooking', id, `${statusChanged ? `Status ${cur.status} → ${data.status} — ` : ''}Updated booking "${updated.title}"`)
+    activityLogRepo.log('booking.updated', 'AssetBooking', id, `${statusChanged ? `Status ${cur.status} â†’ ${data.status} â€” ` : ''}Updated booking "${updated.title}"`)
     return updated
   },
-  delete(id: string): void {
-    ensure()
-    const cur = this.get(id)
-    db.prepare('DELETE FROM AssetBooking WHERE id = ?').run(id)
+  async delete(id: string): void {
+    await ensure()
+    const cur = await this.get(id)
+    await db.prepare('DELETE FROM AssetBooking WHERE id = ?').run(id)
     if (cur) activityLogRepo.log('booking.deleted', 'AssetBooking', id, `Deleted booking "${cur.title}"`)
   },
-  stats() {
-    ensure()
-    const total = (db.prepare('SELECT COUNT(*) as c FROM AssetBooking').get() as { c: number }).c
-    const pending = (db.prepare(`SELECT COUNT(*) as c FROM AssetBooking WHERE status = 'Pending'`).get() as { c: number }).c
-    const active = (db.prepare(`SELECT COUNT(*) as c FROM AssetBooking WHERE status = 'Active'`).get() as { c: number }).c
-    const approved = (db.prepare(`SELECT COUNT(*) as c FROM AssetBooking WHERE status = 'Approved'`).get() as { c: number }).c
-    const upcoming = (db.prepare(`SELECT COUNT(*) as c FROM AssetBooking WHERE status IN ('Approved','Pending') AND startDate >= datetime('now')`).get() as { c: number }).c
+  async stats() {
+    await ensure()
+    const total = (await db.prepare('SELECT COUNT(*) as c FROM AssetBooking').get() as { c: number }).c
+    const pending = (await db.prepare(`SELECT COUNT(*) as c FROM AssetBooking WHERE status = 'Pending'`).get() as { c: number }).c
+    const active = (await db.prepare(`SELECT COUNT(*) as c FROM AssetBooking WHERE status = 'Active'`).get() as { c: number }).c
+    const approved = (await db.prepare(`SELECT COUNT(*) as c FROM AssetBooking WHERE status = 'Approved'`).get() as { c: number }).c
+    const upcoming = (await db.prepare(`SELECT COUNT(*) as c FROM AssetBooking WHERE status IN ('Approved','Pending') AND startDate >= ?`).get(new Date().toISOString()) as { c: number }).c
     return { total, pending, active, approved, upcoming }
   },
 }
 
 // ============ Saved Reports (Round 5) ============
 export const savedReportRepo = {
-  list(): SavedReport[] {
-    ensure()
+  async list(): SavedReport[] {
+    await ensure()
     const r = rows<SavedReport & { config: string }>(
-      db.prepare('SELECT * FROM SavedReport ORDER BY updatedAt DESC').all()
+      await db.prepare('SELECT * FROM SavedReport ORDER BY updatedAt DESC').all()
     )
     return r.map((s) => ({
       ...s,
       config: safeParseConfig(s.config),
     }))
   },
-  get(id: string): SavedReport | null {
-    ensure()
+  async get(id: string): SavedReport | null {
+    await ensure()
     const r = row<SavedReport & { config: string }>(
-      db.prepare('SELECT * FROM SavedReport WHERE id = ?').get(id)
+      await db.prepare('SELECT * FROM SavedReport WHERE id = ?').get(id)
     )
     if (!r) return null
     return { ...r, config: safeParseConfig(r.config) }
   },
-  create(data: { name: string; description?: string; section?: string; config?: SavedReportConfig; createdBy?: string }): SavedReport {
-    ensure()
+  async create(data: { name: string; description?: string; section?: string; config?: SavedReportConfig; createdBy?: string }): SavedReport {
+    await ensure()
     const id = generateId()
     const now = new Date().toISOString()
     const cfg = JSON.stringify(data.config || {})
-    db.prepare(
+    await db.prepare(
       `INSERT INTO SavedReport (id, name, description, section, config, createdBy, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(id, data.name, data.description ?? null, data.section ?? null, cfg, data.createdBy ?? null, now, now)
-    const sr = this.get(id)!
+    const sr = await this.get(id)!
     activityLogRepo.log('savedreport.created', 'SavedReport', id, `Created saved report "${sr.name}"`)
     return sr
   },
-  update(id: string, data: Partial<{ name: string; description?: string | null; section?: string | null; config?: SavedReportConfig }>): SavedReport | null {
-    ensure()
-    const cur = this.get(id)
+  async update(id: string, data: Partial<{ name: string; description?: string | null; section?: string | null; config?: SavedReportConfig }>): SavedReport | null {
+    await ensure()
+    const cur = await this.get(id)
     if (!cur) return null
     const now = new Date().toISOString()
     const sets: string[] = []
@@ -2336,15 +2440,15 @@ export const savedReportRepo = {
     if (!sets.length) return cur
     sets.push('updatedAt = ?')
     params.push(now, id)
-    db.prepare(`UPDATE SavedReport SET ${sets.join(', ')} WHERE id = ?`).run(...params)
-    const updated = this.get(id)!
+    await db.prepare(`UPDATE SavedReport SET ${sets.join(', ')} WHERE id = ?`).run(...params)
+    const updated = await this.get(id)!
     activityLogRepo.log('savedreport.updated', 'SavedReport', id, `Updated saved report "${updated.name}"`)
     return updated
   },
-  delete(id: string): void {
-    ensure()
-    const cur = this.get(id)
-    db.prepare('DELETE FROM SavedReport WHERE id = ?').run(id)
+  async delete(id: string): void {
+    await ensure()
+    const cur = await this.get(id)
+    await db.prepare('DELETE FROM SavedReport WHERE id = ?').run(id)
     if (cur) activityLogRepo.log('savedreport.deleted', 'SavedReport', id, `Deleted saved report "${cur.name}"`)
   },
 }
@@ -2356,15 +2460,15 @@ function safeParseConfig(s: string | null | undefined): SavedReportConfig {
 
 // ============ Vendor Performance Analytics (Round 5) ============
 export const vendorPerformanceRepo = {
-  list(): VendorPerformance[] {
-    ensure()
+  async list(): VendorPerformance[] {
+    await ensure()
     const vendors = rows<Vendor & { isActive: number; rating: number }>(
-      db.prepare('SELECT * FROM Vendor').all()
+      await db.prepare('SELECT * FROM Vendor').all()
     )
     const result: VendorPerformance[] = []
     for (const v of vendors) {
       const pos = rows<PurchaseOrder & { receivedDate: string | null; expectedDate: string | null; status: string; totalAmount: number; orderDate: string }>(
-        db.prepare('SELECT status, totalAmount, orderDate, expectedDate, receivedDate FROM PurchaseOrder WHERE vendorId = ?').all(v.id)
+        await db.prepare('SELECT status, totalAmount, orderDate, expectedDate, receivedDate FROM PurchaseOrder WHERE vendorId = ?').all(v.id)
       )
       const totalPOs = pos.length
       const activePOs = pos.filter((p) => ['Draft', 'Sent', 'Approved', 'Ordered', 'Partial'].includes(p.status)).length
@@ -2414,8 +2518,8 @@ export const vendorPerformanceRepo = {
 // ============ Asset Lifecycle YoY Comparison (Round 5) ============
 // Appended to assetRepo below via a separate export to avoid touching the giant assetRepo object.
 export const assetLifecycleRepo = {
-  yoyByType(yearsBack = 2): LifecycleYoYPoint[] {
-    ensure()
+  async yoyByType(yearsBack = 2): LifecycleYoYPoint[] {
+    await ensure()
     const now = new Date()
     const currentYear = now.getFullYear()
     const years: number[] = []
@@ -2424,7 +2528,7 @@ export const assetLifecycleRepo = {
     const placeholders = years.map(() => '?').join(',')
     const yearStrs = years.map((y) => String(y))
     const rows_ = rows<{ assetType: string; year: number; total: number }>(
-      db.prepare(`
+      await db.prepare(`
         SELECT t.name as assetType, CAST(substr(a.purchaseDate, 1, 4) AS INTEGER) as year, COALESCE(SUM(a.cost), 0) as total
         FROM Asset a
         JOIN AssetType t ON a.assetTypeId = t.id
@@ -2435,7 +2539,7 @@ export const assetLifecycleRepo = {
       `).all(...yearStrs)
     )
     // Also enumerate all asset types so empty types still appear
-    const types = rows<{ name: string }>(db.prepare('SELECT name FROM AssetType ORDER BY name').all()).map((t) => t.name)
+    const types = rows<{ name: string }>(await db.prepare('SELECT name FROM AssetType ORDER BY name').all()).map((t) => t.name)
     const map = new Map<string, Record<number, number>>()
     for (const t of types) map.set(t, Object.fromEntries(years.map((y) => [y, 0])))
     for (const r of rows_) {
@@ -2472,8 +2576,8 @@ function classifyUrgency(daysUntilExpiry: number): ExpirationUrgency {
 }
 
 export const expirationRepo = {
-  list(): ExpirationReport {
-    ensure()
+  async list(): ExpirationReport {
+    await ensure()
     const now = Date.now()
     const DAY_MS = 24 * 60 * 60 * 1000
     const items: ExpirationItem[] = []
@@ -2485,7 +2589,7 @@ export const expirationRepo = {
       currency: string; assetTypeId: string; assetTypeName: string;
       departmentId: string | null; departmentName: string | null;
     }>(
-      db.prepare(`
+      await db.prepare(`
         SELECT a.id, a.assetTag, a.make, a.model, a.serialNumber, a.warrantyExpiry,
                a.cost, a.currency, a.assetTypeId, t.name as assetTypeName,
                a.departmentId, d.name as departmentName
@@ -2528,7 +2632,7 @@ export const expirationRepo = {
       expiryDate: string; cost: number | null; currency: string;
       seatsTotal: number; seatsUsed: number; category: string | null;
     }>(
-      db.prepare(`
+      await db.prepare(`
         SELECT id, name, vendor, key, expiryDate, cost, currency,
                seatsTotal, seatsUsed, category
         FROM SoftwareLicense
@@ -2618,8 +2722,8 @@ function bucketFromRows(
 }
 
 export const utilizationRepo = {
-  report(idleThresholdDays: 30 | 60 | 90 | 180 = 30): UtilizationReport {
-    ensure()
+  async report(idleThresholdDays: 30 | 60 | 90 | 180 = 30): UtilizationReport {
+    await ensure()
     const allAssets = rows<{
       id: string; assetTag: string | null; make: string | null; model: string | null;
       serialNumber: string | null; status: string; purchaseDate: string | null;
@@ -2627,7 +2731,7 @@ export const utilizationRepo = {
       departmentId: string | null; departmentName: string | null;
       locationId: string | null; locationName: string | null;
     }>(
-      db.prepare(`
+      await db.prepare(`
         SELECT a.id, a.assetTag, a.make, a.model, a.serialNumber, a.status,
                a.purchaseDate, a.createdAt, a.assetTypeId,
                t.name as assetTypeName,
@@ -2645,7 +2749,7 @@ export const utilizationRepo = {
 
     // By Department
     const byDeptMap = new Map<string, UtilizationByBucket>()
-    const depts = rows<{ id: string; name: string }>(db.prepare('SELECT id, name FROM Department').all())
+    const depts = rows<{ id: string; name: string }>(await db.prepare('SELECT id, name FROM Department').all())
     for (const d of depts) {
       const rowsForDept = allAssets.filter((a) => a.departmentId === d.id)
       byDeptMap.set(d.id, bucketFromRows(d.id, d.name, rowsForDept))
@@ -2653,7 +2757,7 @@ export const utilizationRepo = {
 
     // By Asset Type
     const byTypeMap = new Map<string, UtilizationByBucket>()
-    const types = rows<{ id: string; name: string }>(db.prepare('SELECT id, name FROM AssetType').all())
+    const types = rows<{ id: string; name: string }>(await db.prepare('SELECT id, name FROM AssetType').all())
     for (const t of types) {
       const rowsForType = allAssets.filter((a) => a.assetTypeId === t.id)
       byTypeMap.set(t.id, bucketFromRows(t.id, t.name, rowsForType))
@@ -2701,8 +2805,8 @@ export const utilizationRepo = {
 
 // ============ Round 6: Maintenance Cost Analytics ============
 export const maintenanceCostRepo = {
-  report(monthsBack = 12): MaintenanceCostReport {
-    ensure()
+  async report(monthsBack = 12): MaintenanceCostReport {
+    await ensure()
     const now = new Date()
     const cutoff = new Date(now.getFullYear(), now.getMonth() - (monthsBack - 1), 1)
 
@@ -2714,7 +2818,7 @@ export const maintenanceCostRepo = {
       assetTag: string | null; make: string | null; model: string | null;
       assetTypeName: string;
     }>(
-      db.prepare(`
+      await db.prepare(`
         SELECT m.id, m.assetId, m.type, m.title, m.status, m.scheduledFor, m.completedAt,
                m.cost, m.createdAt,
                a.assetTag, a.make, a.model,
@@ -2831,10 +2935,10 @@ export const maintenanceCostRepo = {
 
 // ============ Round 7: Asset Timeline ============
 export const assetTimelineRepo = {
-  getForAsset(assetId: string): AssetTimeline | null {
-    ensure()
+  async getForAsset(assetId: string): AssetTimeline | null {
+    await ensure()
     const asset = row<{ id: string; assetTag: string | null; make: string | null; model: string | null; serialNumber: string | null; createdAt: string; status: string }>(
-      db.prepare('SELECT id, assetTag, make, model, serialNumber, createdAt, status FROM Asset WHERE id = ?').get(assetId)
+      await db.prepare('SELECT id, assetTag, make, model, serialNumber, createdAt, status FROM Asset WHERE id = ?').get(assetId)
     )
     if (!asset) return null
 
@@ -2847,13 +2951,13 @@ export const assetTimelineRepo = {
       type: 'created',
       timestamp: asset.createdAt,
       title: 'Asset added to inventory',
-      description: `Initial registration${asset.status ? ` · status: ${asset.status}` : ''}`,
+      description: `Initial registration${asset.status ? ` Â· status: ${asset.status}` : ''}`,
       icon: 'Plus',
     })
 
     // 2. Assignment history
     const history = rows<AssignmentHistory & { assignedToName: string | null; assignedToDept: string | null }>(
-      db.prepare(`
+      await db.prepare(`
         SELECT h.*, p.fullName as assignedToName, d.name as assignedToDept
         FROM AssignmentHistory h
         LEFT JOIN Person p ON h.personId = p.id
@@ -2878,7 +2982,7 @@ export const assetTimelineRepo = {
 
     // 3. Maintenance events
     const maint = rows<{ id: string; type: string; title: string; status: string; scheduledFor: string; completedAt: string | null; cost: number | null; performedBy: string | null; notes: string | null }>(
-      db.prepare(`
+      await db.prepare(`
         SELECT id, type, title, status, scheduledFor, completedAt, cost, performedBy, notes
         FROM MaintenanceSchedule
         WHERE assetId = ?
@@ -2900,7 +3004,7 @@ export const assetTimelineRepo = {
         type,
         timestamp: m.completedAt || m.scheduledFor,
         title,
-        description: m.notes || `${m.type} maintenance · ${m.status}${m.cost ? ` · $${Number(m.cost).toFixed(2)}` : ''}`,
+        description: m.notes || `${m.type} maintenance Â· ${m.status}${m.cost ? ` Â· $${Number(m.cost).toFixed(2)}` : ''}`,
         icon: 'Wrench',
         actorName: m.performedBy,
         meta: { cost: m.cost, type: m.type, status: m.status },
@@ -2909,7 +3013,7 @@ export const assetTimelineRepo = {
 
     // 4. Bookings
     const bookings = rows<{ id: string; title: string; status: string; startDate: string; endDate: string; bookedByName: string | null }>(
-      db.prepare(`
+      await db.prepare(`
         SELECT b.id, b.title, b.status, b.startDate, b.endDate, p.fullName as bookedByName
         FROM AssetBooking b
         LEFT JOIN Person p ON b.bookedById = p.id
@@ -2924,7 +3028,7 @@ export const assetTimelineRepo = {
         type: isCompleted ? 'booking.completed' : 'booking.created',
         timestamp: isCompleted ? b.endDate : b.startDate,
         title: `${isCompleted ? 'Booking ended' : 'Booking created'}: ${b.title}`,
-        description: `${b.startDate.slice(0, 10)} → ${b.endDate.slice(0, 10)} · ${b.status}`,
+        description: `${b.startDate.slice(0, 10)} â†’ ${b.endDate.slice(0, 10)} Â· ${b.status}`,
         icon: 'CalendarClock',
         actorName: b.bookedByName,
       })
@@ -2932,7 +3036,7 @@ export const assetTimelineRepo = {
 
     // 5. License allocations
     const allocs = rows<{ id: string; licenseId: string; licenseName: string; allocatedAt: string }>(
-      db.prepare(`
+      await db.prepare(`
         SELECT al.id, al.licenseId, sl.name as licenseName, al.createdAt as allocatedAt
         FROM AssetLicense al
         JOIN SoftwareLicense sl ON al.licenseId = sl.id
@@ -2953,7 +3057,7 @@ export const assetTimelineRepo = {
 
     // 6. Images
     const images = rows<{ id: string; createdAt: string }>(
-      db.prepare('SELECT id, createdAt FROM AssetImage WHERE assetId = ? ORDER BY createdAt DESC').all(assetId)
+      await db.prepare('SELECT id, createdAt FROM AssetImage WHERE assetId = ? ORDER BY createdAt DESC').all(assetId)
     )
     for (const i of images) {
       events.push({
@@ -2968,7 +3072,7 @@ export const assetTimelineRepo = {
 
     // 7. Disposal (if any)
     const disposal = row<{ id: string; method: string; disposalDate: string; reason: string | null }>(
-      db.prepare('SELECT id, method, disposalDate, reason FROM AssetDisposal WHERE assetId = ?').get(assetId)
+      await db.prepare('SELECT id, method, disposalDate, reason FROM AssetDisposal WHERE assetId = ?').get(assetId)
     )
     if (disposal) {
       events.push({
@@ -2995,7 +3099,7 @@ export const assetTimelineRepo = {
       conditionAtReturn: string | null
       requesterName: string | null
     }>(
-      db.prepare(`
+      await db.prepare(`
         SELECT c.id, c.requestType, c.status, c.reason, c.requestedStartDate, c.requestedReturnDate,
                c.checkedOutAt, c.checkedInAt, c.actualReturnDate, c.conditionAtReturn,
                p.fullName as requesterName
@@ -3013,7 +3117,7 @@ export const assetTimelineRepo = {
           type: 'checkout',
           timestamp: c.checkedOutAt,
           title: `Checked out${c.requesterName ? ` to ${c.requesterName}` : ''}`,
-          description: c.reason || `Return expected ${c.requestedReturnDate ? c.requestedReturnDate.slice(0, 10) : '—'}`,
+          description: c.reason || `Return expected ${c.requestedReturnDate ? c.requestedReturnDate.slice(0, 10) : 'â€”'}`,
           icon: 'ArrowUpRight',
           actorName: c.requesterName,
         })
@@ -3025,7 +3129,7 @@ export const assetTimelineRepo = {
           type: 'checkin',
           timestamp: c.actualReturnDate || c.checkedInAt || c.requestedStartDate,
           title: `Checked in${c.requesterName ? ` from ${c.requesterName}` : ''}`,
-          description: c.conditionAtReturn ? `Returned · condition: ${c.conditionAtReturn}` : 'Asset returned to inventory',
+          description: c.conditionAtReturn ? `Returned Â· condition: ${c.conditionAtReturn}` : 'Asset returned to inventory',
           icon: 'ArrowDownLeft',
           actorName: c.requesterName,
         })
@@ -3037,7 +3141,7 @@ export const assetTimelineRepo = {
           type: 'checkout',
           timestamp: c.requestedStartDate,
           title: `${c.requestType} request ${c.status.toLowerCase()}`,
-          description: c.reason || `Requester: ${c.requesterName || '—'}`,
+          description: c.reason || `Requester: ${c.requesterName || 'â€”'}`,
           icon: 'ClipboardList',
           actorName: c.requesterName,
         })
@@ -3071,8 +3175,8 @@ export const assetTimelineRepo = {
 
 // ============ Round 7: PO Receiving Workflow ============
 export const poReceivingRepo = {
-  receiveItems(poId: string, items: POReceiveItemPayload[]): POReceiveResult | null {
-    ensure()
+  async receiveItems(poId: string, items: POReceiveItemPayload[]): POReceiveResult | null {
+    await ensure()
     const po = purchaseOrderRepo.get(poId)
     if (!po) return null
     if (!po.items || po.items.length === 0) return null
@@ -3107,7 +3211,7 @@ export const poReceivingRepo = {
 
     // Look up the AssetType for tag generation (each item may have its own assetTypeId)
     for (const { item, newTotal, actuallyReceived } of effectiveItems) {
-      db.prepare('UPDATE PurchaseOrderItem SET receivedQuantity = ? WHERE id = ?').run(newTotal, item.id)
+      await db.prepare('UPDATE PurchaseOrderItem SET receivedQuantity = ? WHERE id = ?').run(newTotal, item.id)
       const fullyReceived = newTotal >= item.quantity
       if (!fullyReceived) allReceived = false
 
@@ -3117,12 +3221,12 @@ export const poReceivingRepo = {
       const newAssetTags: string[] = []
       if (item.assetTypeId && actuallyReceived > 0) {
         const at = row<{ id: string; name: string }>(
-          db.prepare('SELECT id, name FROM AssetType WHERE id = ?').get(item.assetTypeId)
+          await db.prepare('SELECT id, name FROM AssetType WHERE id = ?').get(item.assetTypeId)
         )
         if (at) {
           for (let i = 0; i < actuallyReceived; i++) {
             const assetId = generateId()
-            const tag = generateSequentialAssetTag(at.name)
+            const tag = await generateSequentialAssetTag(at.name)
             const cols = [
               'id', 'assetTag', 'assetTypeId', 'make', 'model', 'status',
               'purchaseDate', 'cost', 'currency', 'comments', 'createdAt', 'updatedAt',
@@ -3137,13 +3241,13 @@ export const poReceivingRepo = {
               po.orderDate,
               item.unitPrice,
               po.currency || 'USD',
-              `Auto-created from PO ${po.poNumber} · "${item.description}"`,
+              `Auto-created from PO ${po.poNumber} Â· "${item.description}"`,
               now,
               now,
             ]
             const ph = cols.map(() => '?').join(', ')
-            db.prepare(`INSERT INTO Asset (${cols.join(', ')}) VALUES (${ph})`).run(...vals)
-            logAssetActivity('asset.created', assetId, `Auto-created from PO ${po.poNumber} (line item: ${item.description})`)
+            await db.prepare(`INSERT INTO Asset (${cols.join(', ')}) VALUES (${ph})`).run(...vals)
+            await logAssetActivity('asset.created', assetId, `Auto-created from PO ${po.poNumber} (line item: ${item.description})`)
             newAssetIds.push(assetId)
             newAssetTags.push(tag)
           }
@@ -3171,13 +3275,13 @@ export const poReceivingRepo = {
         'po.item.received',
         'PurchaseOrderItem',
         item.id,
-        `Received ${actuallyReceived} of "${item.description}" (total ${newTotal}/${item.quantity}) for PO ${po.poNumber}${newAssetIds.length ? ` · created ${newAssetIds.length} asset(s)` : ''}`
+        `Received ${actuallyReceived} of "${item.description}" (total ${newTotal}/${item.quantity}) for PO ${po.poNumber}${newAssetIds.length ? ` Â· created ${newAssetIds.length} asset(s)` : ''}`
       )
     }
 
     // Update PO status + receivedDate
     const newStatus = allReceived ? 'Received' : 'Partially Received'
-    db.prepare('UPDATE PurchaseOrder SET status = ?, receivedDate = ?, updatedAt = ? WHERE id = ?').run(
+    await db.prepare('UPDATE PurchaseOrder SET status = ?, receivedDate = ?, updatedAt = ? WHERE id = ?').run(
       newStatus,
       allReceived ? now : null,
       now,
@@ -3197,19 +3301,19 @@ export const poReceivingRepo = {
   },
 }
 
-// ============ Round 8: helper — sequential asset tag generator ============
+// ============ Round 8: helper â€” sequential asset tag generator ============
 // Builds tags like LAPTOP-0007, MON-0012 etc. using AssetType.prefix (or name slug)
 // and the current highest count for that type to keep tags sequential.
-function generateSequentialAssetTag(prefixOrName: string): string {
-  ensure()
+async function generateSequentialAssetTag(prefixOrName: string): Promise<string> {
+  await ensure()
   const slug = (prefixOrName || 'ASSET')
     .toUpperCase()
     .replace(/[^A-Z0-9]+/g, '')
     .slice(0, 8) || 'ASSET'
   // Count existing assets of any type whose assetTag starts with this slug + '-'
-  const row = db
+  const row = (await db
     .prepare("SELECT assetTag FROM Asset WHERE assetTag LIKE ? ORDER BY assetTag DESC LIMIT 1")
-    .get(`${slug}-%`) as { assetTag: string } | undefined
+    .get(`${slug}-%`)) as { assetTag: string } | undefined
   let next = 1
   if (row && row.assetTag) {
     const m = row.assetTag.match(/(\d+)$/)
@@ -3226,8 +3330,8 @@ export const expiryRenewRepo = {
    *   - a software license (licenseId provided)
    * Returns the new PO + the renewed item descriptor.
    */
-  renew(payload: ExpiryRenewPayload): ExpiryRenewResult {
-    ensure()
+  async renew(payload: ExpiryRenewPayload): ExpiryRenewResult {
+    await ensure()
     if (!payload.vendorId) throw new Error('vendorId is required')
     if (!payload.assetId && !payload.licenseId) {
       throw new Error('Either assetId or licenseId must be provided')
@@ -3241,7 +3345,7 @@ export const expiryRenewRepo = {
 
     if (payload.assetId) {
       const asset = row<{ id: string; assetTag: string | null; make: string | null; model: string | null; warrantyExpiry: string | null; cost: number | null; assetTypeId: string }>(
-        db.prepare('SELECT id, assetTag, make, model, warrantyExpiry, cost, assetTypeId FROM Asset WHERE id = ?').get(payload.assetId)
+        await db.prepare('SELECT id, assetTag, make, model, warrantyExpiry, cost, assetTypeId FROM Asset WHERE id = ?').get(payload.assetId)
       )
       if (!asset) throw new Error('Asset not found')
       entityName = `${asset.make || ''} ${asset.model || ''}`.trim() || asset.assetTag || asset.id.slice(0, 8)
@@ -3251,27 +3355,27 @@ export const expiryRenewRepo = {
       assetTypeId = asset.assetTypeId
     } else if (payload.licenseId) {
       const lic = row<{ id: string; name: string; vendor: string | null; expiryDate: string | null; cost: number | null; seatsTotal: number }>(
-        db.prepare('SELECT id, name, vendor, expiryDate, cost, seatsTotal FROM SoftwareLicense WHERE id = ?').get(payload.licenseId)
+        await db.prepare('SELECT id, name, vendor, expiryDate, cost, seatsTotal FROM SoftwareLicense WHERE id = ?').get(payload.licenseId)
       )
       if (!lic) throw new Error('Software license not found')
       entityName = lic.name
       currentExpiry = lic.expiryDate
       description = `License renewal for ${lic.name}`
-      // Use total cost (cost × seatsTotal) when available, otherwise fall back to flat cost
+      // Use total cost (cost Ã— seatsTotal) when available, otherwise fall back to flat cost
       unitPrice = Number(lic.cost) || 0
     }
 
     const now = new Date().toISOString()
     const today = now.slice(0, 10)
     // Generate PO number: RENEW-YYYYMMDD-HHMMSS-XXXX (4-char random suffix prevents collision
-    // when multiple renewals happen in the same second — Round 9 fix)
+    // when multiple renewals happen in the same second â€” Round 9 fix)
     const randSuffix = Math.random().toString(36).slice(2, 6).toUpperCase()
     const poNumber = `RENEW-${today.replace(/-/g, '')}-${now.slice(11, 19).replace(/:/g, '')}-${randSuffix}`
 
     const poId = generateId()
     const expectedDate = payload.expectedDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO PurchaseOrder (id, poNumber, vendorId, status, orderDate, expectedDate, subtotal, taxRate, taxAmount, shippingCost, totalAmount, currency, notes, createdAt, updatedAt)
       VALUES (?, ?, ?, 'Draft', ?, ?, ?, 0, 0, 0, ?, 'USD', ?, ?, ?)
     `).run(
@@ -3282,14 +3386,14 @@ export const expiryRenewRepo = {
       expectedDate,
       unitPrice,
       unitPrice,
-      payload.notes || `${description}${currentExpiry ? ` · current expiry ${currentExpiry.slice(0, 10)}` : ''}`,
+      payload.notes || `${description}${currentExpiry ? ` Â· current expiry ${currentExpiry.slice(0, 10)}` : ''}`,
       now,
       now
     )
 
     // Create one line item describing the renewal
     const itemId = generateId()
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO PurchaseOrderItem (id, poId, assetTypeId, description, quantity, unitPrice, totalPrice, receivedQuantity, notes, createdAt)
       VALUES (?, ?, ?, ?, 1, ?, ?, 0, ?, ?)
     `).run(
@@ -3326,16 +3430,16 @@ export const expiryRenewRepo = {
 
 // ============ Round 7: Asset Location Map ============
 export const assetLocationMapRepo = {
-  report(): AssetLocationMapReport {
-    ensure()
+  async report(): AssetLocationMapReport {
+    await ensure()
     const locations = rows<{ id: string; name: string; address: string | null }>(
-      db.prepare('SELECT id, name, address FROM Location ORDER BY name').all()
+      await db.prepare('SELECT id, name, address FROM Location ORDER BY name').all()
     )
     const allAssets = rows<{
       id: string; assetTag: string | null; make: string | null; model: string | null; status: string;
       cost: number | null; locationId: string | null; assetTypeName: string;
     }>(
-      db.prepare(`
+      await db.prepare(`
         SELECT a.id, a.assetTag, a.make, a.model, a.status, a.cost, a.locationId, t.name as assetTypeName
         FROM Asset a
         LEFT JOIN AssetType t ON a.assetTypeId = t.id
@@ -3443,8 +3547,8 @@ function addMonths(d: Date, n: number): Date {
 }
 
 export const costForecastRepo = {
-  report(historyMonths = 12, forecastMonths = 6): CostForecastReport {
-    ensure()
+  async report(historyMonths = 12, forecastMonths = 6): CostForecastReport {
+    await ensure()
     const now = new Date()
     // Build month buckets for history + forecast
     const historyStart = addMonths(now, -(historyMonths - 1))
@@ -3457,7 +3561,7 @@ export const costForecastRepo = {
 
     // Purchase cost history (from Asset.purchaseDate)
     const purchaseRows = rows<{ month: string; total: number }>(
-      db.prepare(`
+      await db.prepare(`
         SELECT substr(purchaseDate, 1, 7) as month, COALESCE(SUM(cost), 0) as total
         FROM Asset
         WHERE purchaseDate IS NOT NULL AND cost IS NOT NULL
@@ -3469,7 +3573,7 @@ export const costForecastRepo = {
 
     // Maintenance cost history (from MaintenanceSchedule)
     const maintRows = rows<{ month: string; total: number }>(
-      db.prepare(`
+      await db.prepare(`
         SELECT substr(scheduledFor, 1, 7) as month, COALESCE(SUM(cost), 0) as total
         FROM MaintenanceSchedule
         WHERE cost IS NOT NULL AND cost > 0 AND scheduledFor IS NOT NULL
@@ -3479,10 +3583,10 @@ export const costForecastRepo = {
     )
     const maintMap = new Map(maintRows.map((r) => [r.month, Number(r.total) || 0]))
 
-    // Depreciation cost (sum of depreciation per month — approximate using straight-line over 3 years)
+    // Depreciation cost (sum of depreciation per month â€” approximate using straight-line over 3 years)
     // Use DepreciationRule or just compute simple depreciation: cost / 36 per month for each active asset
     const activeAssets = rows<{ cost: number | null; purchaseDate: string | null; status: string }>(
-      db.prepare(`SELECT cost, purchaseDate, status FROM Asset WHERE cost IS NOT NULL AND cost > 0 AND status NOT IN ('Retired', 'Lost')`).all()
+      await db.prepare(`SELECT cost, purchaseDate, status FROM Asset WHERE cost IS NOT NULL AND cost > 0 AND status NOT IN ('Retired', 'Lost')`).all()
     )
     const deprMap = new Map<string, number>()
     for (const a of activeAssets) {
@@ -3601,9 +3705,9 @@ function csvEscape(v: string | number | null | undefined): string {
 
 export const assetAuditRepo = {
   /** List all audits with stats + scope name + startedBy name, newest first. */
-  list(): AssetAudit[] {
-    ensure()
-    const r = db.prepare(`
+  async list(): Promise<AssetAudit[]> {
+    await ensure()
+    const r = await db.prepare(`
       SELECT a.*,
              p.fullName AS startedByName
       FROM AssetAudit a
@@ -3611,29 +3715,30 @@ export const assetAuditRepo = {
       ORDER BY a.createdAt DESC
     `).all()
     const audits = rows<AssetAudit & { startedByName?: string | null }>(r)
-    return audits.map((a) => {
+    return Promise.all(audits.map(async (a) => {
       let scopeName: string | null = null
       if (a.scopeId) {
         if (a.scope === 'location') {
-          const loc = row<{ name: string }>(db.prepare('SELECT name FROM Location WHERE id = ?').get(a.scopeId))
+          const loc = row<{ name: string }>(await db.prepare('SELECT name FROM Location WHERE id = ?').get(a.scopeId))
           scopeName = loc?.name ?? null
         } else if (a.scope === 'department') {
-          const d = row<{ name: string }>(db.prepare('SELECT name FROM Department WHERE id = ?').get(a.scopeId))
+          const d = row<{ name: string }>(await db.prepare('SELECT name FROM Department WHERE id = ?').get(a.scopeId))
           scopeName = d?.name ?? null
         } else if (a.scope === 'type') {
-          const t = row<{ name: string }>(db.prepare('SELECT name FROM AssetType WHERE id = ?').get(a.scopeId))
+          const t = row<{ name: string }>(await db.prepare('SELECT name FROM AssetType WHERE id = ?').get(a.scopeId))
           scopeName = t?.name ?? null
         }
       }
-      return { ...a, scopeName, stats: this.getStats(a.id) }
-    })
+      const stats = await this.getStats(a.id)
+      return { ...a, scopeName, stats }
+    }))
   },
 
   /** Return one audit + all items joined with Asset + AssetType for display. */
-  get(id: string): { audit: AssetAudit; items: AssetAuditItem[] } | null {
-    ensure()
+  async get(id: string): { audit: AssetAudit; items: AssetAuditItem[] } | null {
+    await ensure()
     const a = row<AssetAudit & { startedByName?: string | null }>(
-      db.prepare(`
+      await db.prepare(`
         SELECT a.*, p.fullName AS startedByName
         FROM AssetAudit a
         LEFT JOIN Person p ON a.startedById = p.id
@@ -3644,19 +3749,19 @@ export const assetAuditRepo = {
     let scopeName: string | null = null
     if (a.scopeId) {
       if (a.scope === 'location') {
-        const loc = row<{ name: string }>(db.prepare('SELECT name FROM Location WHERE id = ?').get(a.scopeId))
+        const loc = row<{ name: string }>(await db.prepare('SELECT name FROM Location WHERE id = ?').get(a.scopeId))
         scopeName = loc?.name ?? null
       } else if (a.scope === 'department') {
-        const d = row<{ name: string }>(db.prepare('SELECT name FROM Department WHERE id = ?').get(a.scopeId))
+        const d = row<{ name: string }>(await db.prepare('SELECT name FROM Department WHERE id = ?').get(a.scopeId))
         scopeName = d?.name ?? null
       } else if (a.scope === 'type') {
-        const t = row<{ name: string }>(db.prepare('SELECT name FROM AssetType WHERE id = ?').get(a.scopeId))
+        const t = row<{ name: string }>(await db.prepare('SELECT name FROM AssetType WHERE id = ?').get(a.scopeId))
         scopeName = t?.name ?? null
       }
     }
-    const audit: AssetAudit = { ...a, scopeName, stats: this.getStats(id) }
+    const audit: AssetAudit = { ...a, scopeName, stats: await this.getStats(id) }
 
-    const itemRows = db.prepare(`
+    const itemRows = await db.prepare(`
       SELECT i.*,
              ast.assetTag AS _assetTag2,
              ast.make AS _make,
@@ -3702,8 +3807,8 @@ export const assetAuditRepo = {
   },
 
   /** Create a new audit (status=Open) and auto-populate expected items per scope. */
-  create(payload: AssetAuditCreatePayload): AssetAudit {
-    ensure()
+  async create(payload: AssetAuditCreatePayload): AssetAudit {
+    await ensure()
     if (!payload.title || !payload.title.trim()) throw new Error('Title is required')
     const scope: AuditScope = payload.scope || 'all'
     if (scope !== 'all' && !payload.scopeId) {
@@ -3717,7 +3822,7 @@ export const assetAuditRepo = {
     const auditNumber = `AUD-${today}-${randSuffix}`
     const id = generateId()
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO AssetAudit (id, auditNumber, title, scope, scopeId, status, startedAt, completedAt, startedById, notes, createdAt, updatedAt)
       VALUES (?, ?, ?, ?, ?, 'Open', ?, NULL, ?, ?, ?, ?)
     `).run(
@@ -3746,12 +3851,12 @@ export const assetAuditRepo = {
       scopeWhere += ` AND assetTypeId = ?`
       scopeParams.push(payload.scopeId)
     }
-    const assetRows = db.prepare(
+    const assetRows = await db.prepare(
       `SELECT id, assetTag FROM Asset WHERE ${scopeWhere} ORDER BY assetTag`
     ).all(...scopeParams)
     const assets = rows<{ id: string; assetTag: string | null }>(assetRows)
 
-    const insItem = db.prepare(`
+    const insItem = await db.prepare(`
       INSERT INTO AssetAuditItem (id, auditId, assetId, assetTag, status, expected, scannedAt, scannedByName, notes, createdAt, updatedAt)
       VALUES (?, ?, ?, ?, 'Pending', 1, NULL, NULL, NULL, ?, ?)
     `)
@@ -3766,14 +3871,14 @@ export const assetAuditRepo = {
       `Created audit ${auditNumber} (${scope}${payload.scopeId ? `:${payload.scopeId}` : ''}) with ${assets.length} expected item(s)`
     )
 
-    const created = this.get(id)
+    const created = await this.get(id)
     return created!.audit
   },
 
-  /** Scan an asset during an audit — verify/extra/found logic. */
-  scan(auditId: string, payload: AssetAuditScanPayload): AssetAuditScanResult {
-    ensure()
-    const audit = row<AssetAudit>(db.prepare('SELECT * FROM AssetAudit WHERE id = ?').get(auditId))
+  /** Scan an asset during an audit â€” verify/extra/found logic. */
+  async scan(auditId: string, payload: AssetAuditScanPayload): AssetAuditScanResult {
+    await ensure()
+    const audit = row<AssetAudit>(await db.prepare('SELECT * FROM AssetAudit WHERE id = ?').get(auditId))
     if (!audit) throw new Error('Audit not found')
     if (audit.status === 'Completed' || audit.status === 'Cancelled') {
       throw new Error(`Cannot scan: audit is ${audit.status}`)
@@ -3783,11 +3888,11 @@ export const assetAuditRepo = {
     let asset: { id: string; assetTag: string | null } | null = null
     if (payload.assetId) {
       asset = row<{ id: string; assetTag: string | null }>(
-        db.prepare('SELECT id, assetTag FROM Asset WHERE id = ?').get(payload.assetId)
+        await db.prepare('SELECT id, assetTag FROM Asset WHERE id = ?').get(payload.assetId)
       )
     } else if (payload.assetTag) {
       asset = row<{ id: string; assetTag: string | null }>(
-        db.prepare('SELECT id, assetTag FROM Asset WHERE assetTag = ?').get(payload.assetTag)
+        await db.prepare('SELECT id, assetTag FROM Asset WHERE assetTag = ?').get(payload.assetTag)
       )
     }
     if (!asset) throw new Error('Asset not found')
@@ -3796,7 +3901,7 @@ export const assetAuditRepo = {
     const scannedByName = payload.scannedByName ?? null
 
     const existing = row<AssetAuditItem>(
-      db.prepare('SELECT * FROM AssetAuditItem WHERE auditId = ? AND assetId = ?').get(auditId, asset.id)
+      await db.prepare('SELECT * FROM AssetAuditItem WHERE auditId = ? AND assetId = ?').get(auditId, asset.id)
     )
 
     let item: AssetAuditItem
@@ -3821,34 +3926,34 @@ export const assetAuditRepo = {
         nextStatus = 'Found'
         setScannedAt = true
       }
-      // Verified / Found / Extra → no-op on status
+      // Verified / Found / Extra â†’ no-op on status
       const finalScannedAt = setScannedAt ? now : existing.scannedAt
       const finalScannedBy = scannedByName ?? existing.scannedByName
       if (payload.notes != null && payload.notes.trim() !== '') {
-        db.prepare(`
+        await db.prepare(`
           UPDATE AssetAuditItem
           SET status = ?, scannedAt = ?, scannedByName = ?, notes = ?, updatedAt = ?
           WHERE id = ?
         `).run(nextStatus, finalScannedAt, finalScannedBy, payload.notes, now, existing.id)
       } else {
-        db.prepare(`
+        await db.prepare(`
           UPDATE AssetAuditItem
           SET status = ?, scannedAt = ?, scannedByName = ?, updatedAt = ?
           WHERE id = ?
         `).run(nextStatus, finalScannedAt, finalScannedBy, now, existing.id)
       }
       const refreshed = row<AssetAuditItem>(
-        db.prepare('SELECT * FROM AssetAuditItem WHERE id = ?').get(existing.id)
+        await db.prepare('SELECT * FROM AssetAuditItem WHERE id = ?').get(existing.id)
       )
       item = { ...refreshed!, expected: toBool(refreshed!.expected) }
     } else {
-      // New "Extra" item — asset was not on expected list
+      // New "Extra" item â€” asset was not on expected list
       const newId = generateId()
-      db.prepare(`
+      await db.prepare(`
         INSERT INTO AssetAuditItem (id, auditId, assetId, assetTag, status, expected, scannedAt, scannedByName, notes, createdAt, updatedAt)
         VALUES (?, ?, ?, ?, 'Extra', 0, ?, ?, ?, ?, ?)
       `).run(newId, auditId, asset.id, asset.assetTag ?? null, now, scannedByName, payload.notes ?? null, now, now)
-      const created = row<AssetAuditItem>(db.prepare('SELECT * FROM AssetAuditItem WHERE id = ?').get(newId))
+      const created = row<AssetAuditItem>(await db.prepare('SELECT * FROM AssetAuditItem WHERE id = ?').get(newId))
       item = { ...created!, expected: toBool(created!.expected) }
       wasExpected = false
       newlyVerified = false
@@ -3856,48 +3961,48 @@ export const assetAuditRepo = {
 
     // If audit is Open, transition to In Progress on first scan
     if (audit.status === 'Open') {
-      db.prepare(`UPDATE AssetAudit SET status = 'In Progress', updatedAt = ? WHERE id = ?`).run(now, auditId)
+      await db.prepare(`UPDATE AssetAudit SET status = 'In Progress', updatedAt = ? WHERE id = ?`).run(now, auditId)
     }
 
     activityLogRepo.log(
       'audit.scan',
       'AssetAudit',
       auditId,
-      `Scanned ${asset.assetTag || asset.id.slice(0, 8)} → ${item.status}`
+      `Scanned ${asset.assetTag || asset.id.slice(0, 8)} â†’ ${item.status}`
     )
 
     return { auditId, item, wasExpected, newlyVerified }
   },
 
   /** Mark an expected item as Missing (used during reconciliation). */
-  markMissing(auditId: string, assetId: string): AssetAuditItem | null {
-    ensure()
+  async markMissing(auditId: string, assetId: string): AssetAuditItem | null {
+    await ensure()
     const existing = row<AssetAuditItem>(
-      db.prepare('SELECT * FROM AssetAuditItem WHERE auditId = ? AND assetId = ?').get(auditId, assetId)
+      await db.prepare('SELECT * FROM AssetAuditItem WHERE auditId = ? AND assetId = ?').get(auditId, assetId)
     )
     if (!existing) return null
     const now = new Date().toISOString()
-    db.prepare(`UPDATE AssetAuditItem SET status = 'Missing', updatedAt = ? WHERE id = ?`).run(now, existing.id)
-    const refreshed = row<AssetAuditItem>(db.prepare('SELECT * FROM AssetAuditItem WHERE id = ?').get(existing.id))
+    await db.prepare(`UPDATE AssetAuditItem SET status = 'Missing', updatedAt = ? WHERE id = ?`).run(now, existing.id)
+    const refreshed = row<AssetAuditItem>(await db.prepare('SELECT * FROM AssetAuditItem WHERE id = ?').get(existing.id))
     return refreshed ? { ...refreshed, expected: toBool(refreshed.expected) } : null
   },
 
   /** Finalize: mark all remaining Pending as Missing, set status=Completed. */
-  complete(auditId: string): AssetAudit {
-    ensure()
-    const audit = row<AssetAudit>(db.prepare('SELECT * FROM AssetAudit WHERE id = ?').get(auditId))
+  async complete(auditId: string): AssetAudit {
+    await ensure()
+    const audit = row<AssetAudit>(await db.prepare('SELECT * FROM AssetAudit WHERE id = ?').get(auditId))
     if (!audit) throw new Error('Audit not found')
     if (audit.status === 'Completed') throw new Error('Audit is already completed')
     if (audit.status === 'Cancelled') throw new Error('Cannot complete a cancelled audit')
 
     const now = new Date().toISOString()
-    // Auto-reconcile: any Pending → Missing
-    db.prepare(`
+    // Auto-reconcile: any Pending â†’ Missing
+    await db.prepare(`
       UPDATE AssetAuditItem SET status = 'Missing', updatedAt = ?
       WHERE auditId = ? AND status = 'Pending'
     `).run(now, auditId)
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE AssetAudit SET status = 'Completed', completedAt = ?, updatedAt = ?
       WHERE id = ?
     `).run(now, now, auditId)
@@ -3908,34 +4013,34 @@ export const assetAuditRepo = {
       auditId,
       `Completed audit ${audit.auditNumber}`
     )
-    const refreshed = this.get(auditId)
+    const refreshed = await this.get(auditId)
     return refreshed!.audit
   },
 
   /** Cancel: status=Cancelled, items remain as-is. */
-  cancel(auditId: string): AssetAudit {
-    ensure()
-    const audit = row<AssetAudit>(db.prepare('SELECT * FROM AssetAudit WHERE id = ?').get(auditId))
+  async cancel(auditId: string): AssetAudit {
+    await ensure()
+    const audit = row<AssetAudit>(await db.prepare('SELECT * FROM AssetAudit WHERE id = ?').get(auditId))
     if (!audit) throw new Error('Audit not found')
     if (audit.status === 'Completed') throw new Error('Cannot cancel a completed audit')
     if (audit.status === 'Cancelled') throw new Error('Audit is already cancelled')
 
     const now = new Date().toISOString()
-    db.prepare(`UPDATE AssetAudit SET status = 'Cancelled', updatedAt = ? WHERE id = ?`).run(now, auditId)
+    await db.prepare(`UPDATE AssetAudit SET status = 'Cancelled', updatedAt = ? WHERE id = ?`).run(now, auditId)
     activityLogRepo.log(
       'audit.cancelled',
       'AssetAudit',
       auditId,
       `Cancelled audit ${audit.auditNumber}`
     )
-    const refreshed = this.get(auditId)
+    const refreshed = await this.get(auditId)
     return refreshed!.audit
   },
 
   /** Compute stats (counts by status + accuracyPct). */
-  getStats(auditId: string): AssetAudit['stats'] {
-    ensure()
-    const r = db.prepare(`
+  async getStats(auditId: string): AssetAudit['stats'] {
+    await ensure()
+    const r = await db.prepare(`
       SELECT
         COUNT(*) AS total,
         SUM(CASE WHEN status = 'Verified' THEN 1 ELSE 0 END) AS verified,
@@ -3967,9 +4072,9 @@ export const assetAuditRepo = {
   },
 
   /** Build a CSV export of audit items + summary footer. */
-  exportCsv(auditId: string): string {
-    ensure()
-    const data = this.get(auditId)
+  async exportCsv(auditId: string): string {
+    await ensure()
+    const data = await this.get(auditId)
     if (!data) throw new Error('Audit not found')
     const { audit, items } = data
     const header = [
@@ -3997,10 +4102,10 @@ export const assetAuditRepo = {
       it.notes || '',
     ])
     const csv = [header, ...rowsOut].map((r) => r.map(csvEscape).join(',')).join('\r\n')
-    const stats = audit.stats || this.getStats(auditId)
+    const stats = audit.stats || await this.getStats(auditId)
     const summary = [
       '',
-      `# Audit ${audit.auditNumber} — ${audit.title}`,
+      `# Audit ${audit.auditNumber} â€” ${audit.title}`,
       `# Status,${audit.status}`,
       `# Scope,${audit.scope}${audit.scopeName ? ` (${audit.scopeName})` : ''}`,
       `# Total,${stats.total}`,
@@ -4020,8 +4125,8 @@ export const assetAuditRepo = {
 // selected warranty or license). Mirrors expiryRenewRepo.renew but batches
 // many expirations into a single PO with one line per item.
 export const expiryBulkRenewRepo = {
-  renewBulk(payload: ExpiryBulkRenewPayload): ExpiryBulkRenewResult {
-    ensure()
+  async renewBulk(payload: ExpiryBulkRenewPayload): ExpiryBulkRenewResult {
+    await ensure()
     if (!payload.vendorId) throw new Error('vendorId is required')
     if (!Array.isArray(payload.items) || payload.items.length === 0) {
       throw new Error('At least one renewal item is required')
@@ -4036,7 +4141,7 @@ export const expiryBulkRenewRepo = {
       const hasAsset = !!item.assetId
       const hasLicense = !!item.licenseId
       if (hasAsset === hasLicense) {
-        // Both set OR both unset → invalid (must be exactly one)
+        // Both set OR both unset â†’ invalid (must be exactly one)
         throw new Error('Each renewal item must specify exactly one of assetId or licenseId')
       }
 
@@ -4050,7 +4155,7 @@ export const expiryBulkRenewRepo = {
           cost: number | null
           assetTypeId: string
         }>(
-          db
+          await db
             .prepare(
               'SELECT id, assetTag, make, model, warrantyExpiry, cost, assetTypeId FROM Asset WHERE id = ?'
             )
@@ -4079,7 +4184,7 @@ export const expiryBulkRenewRepo = {
           cost: number | null
           seatsTotal: number
         }>(
-          db
+          await db
             .prepare(
               'SELECT id, name, vendor, expiryDate, cost, seatsTotal FROM SoftwareLicense WHERE id = ?'
             )
@@ -4111,12 +4216,12 @@ export const expiryBulkRenewRepo = {
       payload.expectedDate ||
       new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
 
-    const summaryLine = `${renewedItems.length} renewal item${renewedItems.length === 1 ? '' : 's'} · ${renewedItems.filter((r) => r.expiryType === 'warranty').length} warranty + ${renewedItems.filter((r) => r.expiryType === 'license').length} license`
+    const summaryLine = `${renewedItems.length} renewal item${renewedItems.length === 1 ? '' : 's'} Â· ${renewedItems.filter((r) => r.expiryType === 'warranty').length} warranty + ${renewedItems.filter((r) => r.expiryType === 'license').length} license`
     const notes = payload.notes?.trim()
       ? `${payload.notes.trim()}\n${summaryLine}`
-      : `Auto-generated bulk renewal PO · ${summaryLine}`
+      : `Auto-generated bulk renewal PO Â· ${summaryLine}`
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO PurchaseOrder (id, poNumber, vendorId, status, orderDate, expectedDate, subtotal, taxRate, taxAmount, shippingCost, totalAmount, currency, notes, createdAt, updatedAt)
       VALUES (?, ?, ?, 'Draft', ?, ?, ?, 0, 0, 0, ?, 'USD', ?, ?, ?)
     `).run(
@@ -4135,7 +4240,7 @@ export const expiryBulkRenewRepo = {
     // Insert one line per renewal item
     for (const line of lines) {
       const itemId = generateId()
-      db.prepare(`
+      await db.prepare(`
         INSERT INTO PurchaseOrderItem (id, poId, assetTypeId, description, quantity, unitPrice, totalPrice, receivedQuantity, notes, createdAt)
         VALUES (?, ?, ?, ?, 1, ?, ?, 0, ?, ?)
       `).run(
@@ -4163,3 +4268,48 @@ export const expiryBulkRenewRepo = {
     }
   },
 }
+
+export const importAliasRepo = {
+  async list(): Promise<ImportAlias[]> {
+    await ensure()
+    const r = await db.prepare('SELECT * FROM ImportAlias ORDER BY alias').all()
+    return rows<ImportAlias>(r)
+  },
+  async get(id: string): Promise<ImportAlias | null> {
+    await ensure()
+    return row<ImportAlias>(await db.prepare('SELECT * FROM ImportAlias WHERE id = ?').get(id))
+  },
+  async findByAlias(alias: string): Promise<ImportAlias | null> {
+    await ensure()
+    return row<ImportAlias>(await db.prepare('SELECT * FROM ImportAlias WHERE LOWER(alias) = LOWER(?)').get(alias))
+  },
+  async create(data: { alias: string; field: string }): Promise<ImportAlias> {
+    await ensure()
+    const id = generateId()
+    const now = new Date().toISOString()
+    await db.prepare(
+      'INSERT INTO ImportAlias (id, alias, field, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?)'
+    ).run(id, data.alias.trim(), data.field.trim(), now, now)
+    return (await this.get(id))!
+  },
+  async update(id: string, data: { alias?: string; field?: string }): Promise<ImportAlias | null> {
+    await ensure()
+    const now = new Date().toISOString()
+    const cur = await this.get(id)
+    if (!cur) return null
+    await db.prepare('UPDATE ImportAlias SET alias = ?, field = ?, updatedAt = ? WHERE id = ?').run(
+      data.alias?.trim() ?? cur.alias,
+      data.field?.trim() ?? cur.field,
+      now,
+      id
+    )
+    return await this.get(id)
+  },
+  async delete(id: string): Promise<void> {
+    await ensure()
+    await db.prepare('DELETE FROM ImportAlias WHERE id = ?').run(id)
+  },
+}
+
+
+

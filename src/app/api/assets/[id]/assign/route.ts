@@ -8,7 +8,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   try {
     const { id } = await params
     const body = await req.json()
-    const hist = assetRepo.assign(id, body)
+    const hist = await assetRepo.assign(id, body)
     if (!hist) return NextResponse.json({ error: 'Asset not found' }, { status: 404 })
     return NextResponse.json(hist, { status: 201 })
   } catch (e) {

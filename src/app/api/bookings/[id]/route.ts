@@ -7,7 +7,7 @@ import { assetBookingRepo } from '@/lib/repo'
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    const b = assetBookingRepo.get(id)
+    const b = await assetBookingRepo.get(id)
     if (!b) return NextResponse.json({ error: 'Booking not found' }, { status: 404 })
     return NextResponse.json(b)
   } catch (e) {
@@ -20,7 +20,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   try {
     const { id } = await params
     const data = await req.json()
-    const updated = assetBookingRepo.update(id, data)
+    const updated = await assetBookingRepo.update(id, data)
     if (!updated) return NextResponse.json({ error: 'Booking not found' }, { status: 404 })
     return NextResponse.json(updated)
   } catch (e) {
@@ -32,7 +32,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    assetBookingRepo.delete(id)
+    await assetBookingRepo.delete(id)
     return NextResponse.json({ success: true })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)

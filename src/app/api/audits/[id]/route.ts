@@ -10,7 +10,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params
-    const data = assetAuditRepo.get(id)
+    const data = await assetAuditRepo.get(id)
     if (!data) {
       return NextResponse.json({ error: 'Audit not found' }, { status: 404 })
     }

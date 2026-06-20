@@ -136,6 +136,19 @@ export interface Asset {
   assignedToId?: string | null
   departmentId?: string | null
   locationId?: string | null
+  computerName?: string | null
+  manufactureYear?: string | null
+  mousePn?: string | null
+  monitorPartNumber?: string | null
+  ipAddress?: string | null
+  tonersModel?: string | null
+  deviceType?: string | null
+  qty?: string | null
+  barcodeScannerModel?: string | null
+  barcodeScannerSn?: string | null
+  scaleMachineIpAddress?: string | null
+  hddInstalledDate?: string | null
+  hddInstalledDate2?: string | null
   comments?: string | null
   createdAt: string
   updatedAt: string
@@ -1186,4 +1199,13 @@ export interface ExpiryBulkRenewResult {
     currentExpiry: string | null
   }[]
 }
+
+export interface ImportAlias {
+  id: string
+  alias: string
+  field: string
+  createdAt: string
+  updatedAt: string
+}
+
 

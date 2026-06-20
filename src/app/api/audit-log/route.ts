@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic'
 export async function GET(req: NextRequest) {
   try {
     const sp = req.nextUrl.searchParams
-    const data = activityLogRepo.list({
+    const data = await activityLogRepo.list({
       limit: sp.get('limit') ? Number(sp.get('limit')) : 100,
       entityType: sp.get('entityType') || undefined,
       entityId: sp.get('entityId') || undefined,

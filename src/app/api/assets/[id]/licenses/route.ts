@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    return NextResponse.json(licenseRepo.listForAsset(id))
+    return NextResponse.json(await licenseRepo.listForAsset(id))
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
   }
@@ -21,7 +21,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     const body = await req.json().catch(() => ({}))
     const assetLicenseId = body.assetLicenseId
     if (!assetLicenseId) return NextResponse.json({ error: 'assetLicenseId required' }, { status: 400 })
-    licenseRepo.deallocate(assetLicenseId)
+    await licenseRepo.deallocate(assetLicenseId)
     return NextResponse.json({ success: true, assetId })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })

@@ -8,7 +8,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   try {
     const { id } = await params
     const data = await req.json().catch(() => ({}))
-    const updated = assetBookingRepo.update(id, {
+    const updated = await assetBookingRepo.update(id, {
       status: 'Completed',
       checkedInAt: new Date().toISOString(),
       notes: data.notes || null,

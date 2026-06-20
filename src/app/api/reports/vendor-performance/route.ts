@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
-    const data = vendorPerformanceRepo.list()
+    const data = await vendorPerformanceRepo.list()
     const totals = {
       vendorCount: data.length,
       activeVendors: data.filter((v) => v.isActive).length,

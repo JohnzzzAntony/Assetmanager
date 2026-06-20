@@ -6,7 +6,7 @@ import { locationRepo } from '@/lib/repo'
 
 export async function GET() {
   try {
-    return NextResponse.json(locationRepo.list())
+    return NextResponse.json(await locationRepo.list())
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     return NextResponse.json({ error: msg }, { status: 500 })
@@ -16,7 +16,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    return NextResponse.json(locationRepo.create(body), { status: 201 })
+    return NextResponse.json(await locationRepo.create(body), { status: 201 })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     return NextResponse.json({ error: msg }, { status: 500 })

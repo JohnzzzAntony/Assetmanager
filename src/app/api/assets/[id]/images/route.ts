@@ -18,7 +18,7 @@ async function ensureUploadDir() {
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    return NextResponse.json(imageRepo.listForAsset(id))
+    return NextResponse.json(await imageRepo.listForAsset(id))
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     return NextResponse.json({ error: msg }, { status: 500 })
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const buffer = Buffer.from(await file.arrayBuffer())
     await writeFile(filePath, buffer)
 
-    const img = imageRepo.create({
+    const img = await imageRepo.create({
       assetId: id,
       fileName: file.name,
       filePath: `/uploads/${fileName}`,

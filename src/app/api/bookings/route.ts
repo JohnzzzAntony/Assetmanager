@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
     const from = url.searchParams.get('from') || undefined
     const to = url.searchParams.get('to') || undefined
     const limit = url.searchParams.get('limit') ? Number(url.searchParams.get('limit')) : undefined
-    const bookings = assetBookingRepo.list({ assetId, status, bookedById, from, to, limit })
+    const bookings = await assetBookingRepo.list({ assetId, status, bookedById, from, to, limit })
     return NextResponse.json(bookings)
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
@@ -32,8 +32,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'endDate must be after startDate' }, { status: 400 })
     }
     // Check for conflicts
-    const conflicts = assetBookingRepo.findConflicts(data.assetId, data.startDate, data.endDate)
-    const created = assetBookingRepo.create(data)
+    const conflicts = await assetBookingRepo.findConflicts(data.assetId, data.startDate, data.endDate)
+    const created = await assetBookingRepo.create(data)
     return NextResponse.json({ ...created, _conflicts: conflicts }, { status: 201 })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)

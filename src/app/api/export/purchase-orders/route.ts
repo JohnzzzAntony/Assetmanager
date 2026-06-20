@@ -13,7 +13,7 @@ function csvEscape(value: unknown): string {
 
 export async function GET() {
   try {
-    const pos = purchaseOrderRepo.list()
+    const pos = await purchaseOrderRepo.list()
     const headers = ['PO Number', 'Vendor', 'Status', 'Order Date', 'Expected Date', 'Received Date', 'Subtotal', 'Tax Rate %', 'Tax Amount', 'Shipping', 'Total', 'Currency', 'Requested By', 'Approved By', 'Approved At', 'Item Count', 'Notes']
     const rows = pos.map((po) => [
       po.poNumber, po.vendor?.name || '', po.status, po.orderDate, po.expectedDate || '', po.receivedDate || '',

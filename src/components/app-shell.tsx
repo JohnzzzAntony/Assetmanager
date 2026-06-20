@@ -160,9 +160,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="mx-auto flex max-w-[1600px] flex-col items-center justify-between gap-2 text-xs text-muted-foreground sm:flex-row">
             <div className="flex items-center gap-2">
               <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="font-medium text-foreground/80">AssetHub</span>
+              <span className="font-medium text-foreground/80">Maylaa Assets</span>
               <span className="opacity-50">·</span>
-              <span>IT Asset Manager v2.6</span>
+              <span>Maylaa International v2.6</span>
               <span className="hidden sm:inline opacity-50">·</span>
               <span className="hidden sm:inline rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">Round 9</span>
             </div>

@@ -39,6 +39,7 @@ import type {
   AssetAuditScanResult,
   ExpiryBulkRenewPayload,
   ExpiryBulkRenewResult,
+  ImportAlias,
 } from './types'
 
 class ApiError extends Error {
@@ -604,4 +605,14 @@ export const auditsApi = {
   cancel: (id: string) =>
     request<AssetAudit>(`/api/audits/${id}/cancel`, { method: 'POST' }),
   exportCsvUrl: (id: string) => `/api/audits/${id}/export`,
+}
+
+export const importAliasesApi = {
+  list: () => request<ImportAlias[]>('/api/import/aliases'),
+  create: (data: { alias: string; field: string }) =>
+    request<ImportAlias>('/api/import/aliases', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: { alias?: string; field?: string }) =>
+    request<ImportAlias>(`/api/import/aliases/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: string) =>
+    request<void>(`/api/import/aliases/${id}`, { method: 'DELETE' }),
 }

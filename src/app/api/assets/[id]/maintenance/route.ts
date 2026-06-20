@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    return NextResponse.json(maintenanceRepo.listForAsset(id))
+    return NextResponse.json(await maintenanceRepo.listForAsset(id))
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
   }

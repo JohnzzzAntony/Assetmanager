@@ -74,15 +74,28 @@ interface FormState {
   monitorModel: string
   monitorSn: string
   monitorSize: string
+  monitorPartNumber: string
   keyboardMake: string
   keyboardModel: string
   keyboardSn: string
   mouseMake: string
   mouseModel: string
   mouseSn: string
+  mousePn: string
   assignedToId: string
   departmentId: string
   locationId: string
+  computerName: string
+  manufactureYear: string
+  ipAddress: string
+  tonersModel: string
+  deviceType: string
+  qty: string
+  barcodeScannerModel: string
+  barcodeScannerSn: string
+  scaleMachineIpAddress: string
+  hddInstalledDate: string
+  hddInstalledDate2: string
   comments: string
 }
 
@@ -92,8 +105,12 @@ const EMPTY: FormState = {
   warrantyExpiry: '', os: '', osKey: '', officeKey: '', cpu: '', gpu: '', ram: '',
   storage: '', color: '', imei1: '', imei2: '', rom: '', otpMobileNumber: '',
   googleAppleAccount: '', monitorMake: '', monitorModel: '', monitorSn: '', monitorSize: '',
-  keyboardMake: '', keyboardModel: '', keyboardSn: '', mouseMake: '', mouseModel: '',
-  mouseSn: '', assignedToId: '', departmentId: '', locationId: '', comments: '',
+  monitorPartNumber: '', keyboardMake: '', keyboardModel: '', keyboardSn: '',
+  mouseMake: '', mouseModel: '', mouseSn: '', mousePn: '',
+  assignedToId: '', departmentId: '', locationId: '',
+  computerName: '', manufactureYear: '', ipAddress: '', tonersModel: '', deviceType: '',
+  qty: '', barcodeScannerModel: '', barcodeScannerSn: '', scaleMachineIpAddress: '',
+  hddInstalledDate: '', hddInstalledDate2: '', comments: '',
 }
 
 function toDateInput(s?: string | null): string {
@@ -166,15 +183,28 @@ export function AssetFormView({ mode, id, prefill }: { mode: 'new' | 'edit'; id?
         monitorModel: existing.monitorModel || '',
         monitorSn: existing.monitorSn || '',
         monitorSize: existing.monitorSize || '',
+        monitorPartNumber: existing.monitorPartNumber || '',
         keyboardMake: existing.keyboardMake || '',
         keyboardModel: existing.keyboardModel || '',
         keyboardSn: existing.keyboardSn || '',
         mouseMake: existing.mouseMake || '',
         mouseModel: existing.mouseModel || '',
         mouseSn: existing.mouseSn || '',
+        mousePn: existing.mousePn || '',
         assignedToId: existing.assignedToId || '',
         departmentId: existing.departmentId || '',
         locationId: existing.locationId || '',
+        computerName: existing.computerName || '',
+        manufactureYear: existing.manufactureYear || '',
+        ipAddress: existing.ipAddress || '',
+        tonersModel: existing.tonersModel || '',
+        deviceType: existing.deviceType || '',
+        qty: existing.qty || '',
+        barcodeScannerModel: existing.barcodeScannerModel || '',
+        barcodeScannerSn: existing.barcodeScannerSn || '',
+        scaleMachineIpAddress: existing.scaleMachineIpAddress || '',
+        hddInstalledDate: existing.hddInstalledDate || '',
+        hddInstalledDate2: existing.hddInstalledDate2 || '',
         comments: existing.comments || '',
       })
     }
@@ -283,7 +313,7 @@ export function AssetFormView({ mode, id, prefill }: { mode: 'new' | 'edit'; id?
   const cfg = STATUS_CONFIG[form.status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG['In Stock']
 
   return (
-    <div className="space-y-5 animate-fade-in-up">
+    <div className="space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -465,6 +495,7 @@ export function AssetFormView({ mode, id, prefill }: { mode: 'new' | 'edit'; id?
                 <Field label="Monitor Model"><Input value={form.monitorModel} onChange={(e) => set('monitorModel', e.target.value)} /></Field>
                 <Field label="Monitor S/N"><Input value={form.monitorSn} onChange={(e) => set('monitorSn', e.target.value)} className="font-mono text-xs" /></Field>
                 <Field label="Monitor Size"><Input value={form.monitorSize} onChange={(e) => set('monitorSize', e.target.value)} placeholder='24"' /></Field>
+                <Field label="Monitor Part #"><Input value={form.monitorPartNumber} onChange={(e) => set('monitorPartNumber', e.target.value)} className="font-mono text-xs" /></Field>
               </div>
               <Separator />
               <div className="grid gap-4 sm:grid-cols-3">
@@ -473,11 +504,57 @@ export function AssetFormView({ mode, id, prefill }: { mode: 'new' | 'edit'; id?
                 <Field label="Keyboard S/N"><Input value={form.keyboardSn} onChange={(e) => set('keyboardSn', e.target.value)} className="font-mono text-xs" /></Field>
               </div>
               <Separator />
-              <div className="grid gap-4 sm:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-4">
                 <Field label="Mouse Make" icon={Mouse}><Input value={form.mouseMake} onChange={(e) => set('mouseMake', e.target.value)} /></Field>
                 <Field label="Mouse Model"><Input value={form.mouseModel} onChange={(e) => set('mouseModel', e.target.value)} /></Field>
                 <Field label="Mouse S/N"><Input value={form.mouseSn} onChange={(e) => set('mouseSn', e.target.value)} className="font-mono text-xs" /></Field>
+                <Field label="Mouse P/N"><Input value={form.mousePn} onChange={(e) => set('mousePn', e.target.value)} className="font-mono text-xs" /></Field>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Additional Technical Details */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <Cpu className="h-4 w-4" /> Additional Technical Details
+              </CardTitle>
+              <CardDescription>IT-specific fields from Maylaa asset register</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4 sm:grid-cols-2">
+              <Field label="Computer Name" icon={Package}>
+                <Input value={form.computerName} onChange={(e) => set('computerName', e.target.value)} placeholder="PC-MAYLAA-001" className="font-mono" />
+              </Field>
+              <Field label="IP Address" icon={Package}>
+                <Input value={form.ipAddress} onChange={(e) => set('ipAddress', e.target.value)} placeholder="192.168.1.100" className="font-mono" />
+              </Field>
+              <Field label="Device Type" icon={Package}>
+                <Input value={form.deviceType} onChange={(e) => set('deviceType', e.target.value)} placeholder="Desktop, Laptop, POS..." />
+              </Field>
+              <Field label="Manufacture Year" icon={Calendar}>
+                <Input value={form.manufactureYear} onChange={(e) => set('manufactureYear', e.target.value)} placeholder="2021" />
+              </Field>
+              <Field label="Quantity" icon={Package}>
+                <Input value={form.qty} onChange={(e) => set('qty', e.target.value)} placeholder="1" />
+              </Field>
+              <Field label="Toners Model" icon={Package}>
+                <Input value={form.tonersModel} onChange={(e) => set('tonersModel', e.target.value)} placeholder="Toner model for printers" />
+              </Field>
+              <Field label="Barcode Scanner Model" icon={Package}>
+                <Input value={form.barcodeScannerModel} onChange={(e) => set('barcodeScannerModel', e.target.value)} />
+              </Field>
+              <Field label="Barcode Scanner S/N" icon={Package}>
+                <Input value={form.barcodeScannerSn} onChange={(e) => set('barcodeScannerSn', e.target.value)} className="font-mono" />
+              </Field>
+              <Field label="Scale Machine IP" icon={Package}>
+                <Input value={form.scaleMachineIpAddress} onChange={(e) => set('scaleMachineIpAddress', e.target.value)} placeholder="192.168.1.200" className="font-mono" />
+              </Field>
+              <Field label="HDD Installed Date" icon={Calendar}>
+                <Input value={form.hddInstalledDate} onChange={(e) => set('hddInstalledDate', e.target.value)} placeholder="2023-06-15" />
+              </Field>
+              <Field label="HDD Installed Date 2" icon={Calendar}>
+                <Input value={form.hddInstalledDate2} onChange={(e) => set('hddInstalledDate2', e.target.value)} placeholder="2024-01-10" />
+              </Field>
             </CardContent>
           </Card>
 

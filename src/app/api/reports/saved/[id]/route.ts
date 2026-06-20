@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic'
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await ctx.params
-    const sr = savedReportRepo.get(id)
+    const sr = await savedReportRepo.get(id)
     if (!sr) return NextResponse.json({ error: 'not found' }, { status: 404 })
     return NextResponse.json(sr)
   } catch (e) {
@@ -20,7 +20,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   try {
     const { id } = await ctx.params
     const body = await req.json()
-    const updated = savedReportRepo.update(id, body)
+    const updated = await savedReportRepo.update(id, body)
     if (!updated) return NextResponse.json({ error: 'not found' }, { status: 404 })
     return NextResponse.json(updated)
   } catch (e) {
@@ -32,7 +32,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
 export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await ctx.params
-    savedReportRepo.delete(id)
+    await savedReportRepo.delete(id)
     return NextResponse.json({ success: true })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)

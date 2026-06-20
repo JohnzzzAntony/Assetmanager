@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
       const n = parseInt(raw, 10)
       if (n === 30 || n === 60 || n === 90 || n === 180) idleThresholdDays = n
     }
-    const data = utilizationRepo.report(idleThresholdDays)
+    const data = await utilizationRepo.report(idleThresholdDays)
     return NextResponse.json(data)
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })

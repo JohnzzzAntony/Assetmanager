@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
     const sp = req.nextUrl.searchParams
     const vendorId = sp.get('vendorId') || undefined
     const status = sp.get('status') || undefined
-    let data = purchaseOrderRepo.list()
+    let data = await purchaseOrderRepo.list()
     if (vendorId) data = data.filter((po) => po.vendorId === vendorId)
     if (status) data = data.filter((po) => po.status === status)
     return NextResponse.json(data)
@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     if (!body.vendorId) {
       return NextResponse.json({ error: 'vendorId required' }, { status: 400 })
     }
-    const created = purchaseOrderRepo.create(body)
+    const created = await purchaseOrderRepo.create(body)
     return NextResponse.json(created, { status: 201 })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })

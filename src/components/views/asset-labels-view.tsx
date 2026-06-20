@@ -94,13 +94,13 @@ export function AssetLabelsView() {
     win.document.write(`
       <html>
       <head>
-        <title>Asset Labels</title>
+        <title>Maylaa Asset Labels</title>
         <style>
-          @page { margin: 8mm; }
+          @page { margin: 5mm; size: auto; }
           body { margin: 0; font-family: Arial, sans-serif; }
-          .label-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8mm; padding: 8mm; }
-          .label { border: 1px dashed #ccc; padding: 4mm; text-align: center; page-break-inside: avoid; }
-          .label img { display: block; margin: 0 auto; }
+          .label-grid { display: flex; flex-wrap: wrap; gap: 3mm; padding: 3mm; }
+          .label { width: 45.7mm; height: 21.2mm; overflow: hidden; page-break-inside: avoid; box-sizing: border-box; }
+          .label img { width: 100%; height: 100%; object-fit: contain; display: block; }
           @media print { .label { border: none; } }
         </style>
       </head>

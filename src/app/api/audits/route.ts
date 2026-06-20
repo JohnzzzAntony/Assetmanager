@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
-    const data = assetAuditRepo.list()
+    const data = await assetAuditRepo.list()
     return NextResponse.json(data)
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     if (!body || !body.title || !String(body.title).trim()) {
       return NextResponse.json({ error: 'Title is required' }, { status: 400 })
     }
-    const created = assetAuditRepo.create(body)
+    const created = await assetAuditRepo.create(body)
     return NextResponse.json(created, { status: 201 })
   } catch (e) {
     const msg = String(e)

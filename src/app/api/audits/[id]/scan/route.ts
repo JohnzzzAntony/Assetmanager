@@ -17,7 +17,7 @@ export async function POST(
         { status: 400 }
       )
     }
-    const result = assetAuditRepo.scan(id, body)
+    const result = await assetAuditRepo.scan(id, body)
     return NextResponse.json(result, { status: 200 })
   } catch (e) {
     const msg = String(e)

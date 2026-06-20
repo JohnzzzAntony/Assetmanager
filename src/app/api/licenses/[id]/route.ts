@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic'
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    const lic = licenseRepo.get(id)
+    const lic = await licenseRepo.get(id)
     if (!lic) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     return NextResponse.json(lic)
   } catch (e) {
@@ -19,7 +19,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   try {
     const { id } = await params
     const body = await req.json()
-    const updated = licenseRepo.update(id, body)
+    const updated = await licenseRepo.update(id, body)
     if (!updated) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     return NextResponse.json(updated)
   } catch (e) {
@@ -30,7 +30,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    licenseRepo.delete(id)
+    await licenseRepo.delete(id)
     return new NextResponse(null, { status: 204 })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })

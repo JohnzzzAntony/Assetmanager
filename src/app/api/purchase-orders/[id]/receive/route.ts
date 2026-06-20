@@ -11,7 +11,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!body || !Array.isArray(body.items)) {
       return NextResponse.json({ error: 'Body must include `items` array' }, { status: 400 })
     }
-    const result = poReceivingRepo.receiveItems(id, body.items)
+    const result = await poReceivingRepo.receiveItems(id, body.items)
     if (!result) return NextResponse.json({ error: 'PO not found or has no items' }, { status: 404 })
     return NextResponse.json(result)
   } catch (e) {

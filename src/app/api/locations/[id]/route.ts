@@ -7,7 +7,7 @@ import { locationRepo } from '@/lib/repo'
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    const item = locationRepo.get(id)
+    const item = await locationRepo.get(id)
     if (!item) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     return NextResponse.json(item)
   } catch (e) {
@@ -20,7 +20,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   try {
     const { id } = await params
     const body = await req.json()
-    const updated = locationRepo.update(id, body)
+    const updated = await locationRepo.update(id, body)
     if (!updated) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     return NextResponse.json(updated)
   } catch (e) {
@@ -32,7 +32,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    locationRepo.delete(id)
+    await locationRepo.delete(id)
     return new NextResponse(null, { status: 204 })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)

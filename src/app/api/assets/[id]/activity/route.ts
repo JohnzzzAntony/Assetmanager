@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    return NextResponse.json(activityLogRepo.listForEntity('Asset', id))
+    return NextResponse.json(await activityLogRepo.listForEntity('Asset', id))
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
   }

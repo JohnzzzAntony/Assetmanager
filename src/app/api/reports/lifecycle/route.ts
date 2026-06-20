@@ -6,7 +6,7 @@ import { assetRepo } from '@/lib/repo'
 
 export async function GET() {
   try {
-    const data = assetRepo.lifecycleCostByType()
+    const data = await assetRepo.lifecycleCostByType()
     const totals = data.reduce(
       (acc, d) => {
         acc.purchaseCost += d.purchaseCost

@@ -9,7 +9,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const { id } = await params
     const body = await req.json().catch(() => ({}))
     if (!body.approverId) return NextResponse.json({ error: 'approverId required' }, { status: 400 })
-    const updated = checkoutRepo.reject(id, body.approverId, body.notes)
+    const updated = await checkoutRepo.reject(id, body.approverId, body.notes)
     if (!updated) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     return NextResponse.json(updated)
   } catch (e) {

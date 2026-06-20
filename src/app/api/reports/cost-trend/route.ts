@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
   try {
     const url = new URL(req.url)
     const months = Number(url.searchParams.get('months') || '12')
-    const data = assetRepo.costTrend(Math.min(Math.max(months, 1), 36))
+    const data = await assetRepo.costTrend(Math.min(Math.max(months, 1), 36))
     return NextResponse.json({ data })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)

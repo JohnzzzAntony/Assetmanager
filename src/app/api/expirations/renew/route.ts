@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     if (!body.vendorId) {
       return NextResponse.json({ error: 'vendorId is required' }, { status: 400 })
     }
-    const result = expiryRenewRepo.renew(body)
+    const result = await expiryRenewRepo.renew(body)
     return NextResponse.json(result, { status: 201 })
   } catch (e) {
     const msg = String(e)

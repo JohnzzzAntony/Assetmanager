@@ -15,7 +15,7 @@ function csvEscape(v: string | number | null | undefined): string {
 
 export async function GET() {
   try {
-    const { items, totals } = expirationRepo.list()
+    const { items, totals } = await expirationRepo.list()
     const header = [
       'Kind',
       'Name',

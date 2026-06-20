@@ -29,12 +29,12 @@ export async function POST(req: NextRequest) {
         if (!payload?.status) {
           return NextResponse.json({ error: 'status is required for setStatus' }, { status: 400 })
         }
-        affected = assetRepo.bulkSetStatus(ids, payload.status)
+        affected = await assetRepo.bulkSetStatus(ids, payload.status)
         message = `Updated status to "${payload.status}" for ${affected} asset(s)`
         break
       }
       case 'delete': {
-        affected = assetRepo.bulkDelete(ids)
+        affected = await assetRepo.bulkDelete(ids)
         message = `Deleted ${affected} asset(s)`
         break
       }
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
         if (!payload?.tagId) {
           return NextResponse.json({ error: 'tagId is required for assignTag' }, { status: 400 })
         }
-        affected = assetRepo.bulkAssignTag(ids, payload.tagId)
+        affected = await assetRepo.bulkAssignTag(ids, payload.tagId)
         message = `Tagged ${affected} asset(s)`
         break
       }
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
         if (!payload?.tagId) {
           return NextResponse.json({ error: 'tagId is required for removeTag' }, { status: 400 })
         }
-        affected = assetRepo.bulkRemoveTag(ids, payload.tagId)
+        affected = await assetRepo.bulkRemoveTag(ids, payload.tagId)
         message = `Removed tag from ${affected} asset(s)`
         break
       }

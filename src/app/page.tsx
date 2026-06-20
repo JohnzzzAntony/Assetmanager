@@ -2,34 +2,36 @@
 
 import { AppShell } from '@/components/app-shell'
 import { useNav } from '@/lib/nav'
-import { DashboardView } from '@/components/views/dashboard-view'
-import { AssetsListView } from '@/components/views/assets-list-view'
-import { AssetDetailView } from '@/components/views/asset-detail-view'
-import { AssetFormView } from '@/components/views/asset-form-view'
-import { OcrUploadView } from '@/components/views/ocr-upload-view'
-import { DepartmentsView } from '@/components/views/departments-view'
-import { LocationsView } from '@/components/views/locations-view'
-import { PersonsView } from '@/components/views/persons-view'
-import { AssetTypesView } from '@/components/views/asset-types-view'
-import { ImportView } from '@/components/views/import-view'
-import { ReportsView } from '@/components/views/reports-view'
-import { MaintenanceView } from '@/components/views/maintenance-view'
-import { AuditLogView } from '@/components/views/audit-log-view'
-import { LicensesView } from '@/components/views/licenses-view'
-import { AssetLabelsView } from '@/components/views/asset-labels-view'
-import { CheckoutsView } from '@/components/views/checkouts-view'
-import { DepreciationView } from '@/components/views/depreciation-view'
-import { NotificationsView } from '@/components/views/notifications-view'
-import { VendorsView } from '@/components/views/vendors-view'
-import { PurchaseOrdersView } from '@/components/views/purchase-orders-view'
-import { DisposalsView } from '@/components/views/disposals-view'
-import { TagsView } from '@/components/views/tags-view'
-import { BookingsView } from '@/components/views/bookings-view'
-import { ExpirationsView } from '@/components/views/expirations-view'
-import { UtilizationView } from '@/components/views/utilization-view'
-import { AssetMapView } from '@/components/views/asset-map-view'
-import { AssetTimelineView } from '@/components/views/asset-timeline-view'
-import { AuditsView } from '@/components/views/audits-view'
+import dynamic from 'next/dynamic'
+
+const DashboardView = dynamic(() => import('@/components/views/dashboard-view').then((m) => m.DashboardView), { ssr: false })
+const AssetsListView = dynamic(() => import('@/components/views/assets-list-view').then((m) => m.AssetsListView), { ssr: false })
+const AssetDetailView = dynamic(() => import('@/components/views/asset-detail-view').then((m) => m.AssetDetailView), { ssr: false })
+const AssetFormView = dynamic(() => import('@/components/views/asset-form-view').then((m) => m.AssetFormView), { ssr: false })
+const OcrUploadView = dynamic(() => import('@/components/views/ocr-upload-view').then((m) => m.OcrUploadView), { ssr: false })
+const DepartmentsView = dynamic(() => import('@/components/views/departments-view').then((m) => m.DepartmentsView), { ssr: false })
+const LocationsView = dynamic(() => import('@/components/views/locations-view').then((m) => m.LocationsView), { ssr: false })
+const PersonsView = dynamic(() => import('@/components/views/persons-view').then((m) => m.PersonsView), { ssr: false })
+const AssetTypesView = dynamic(() => import('@/components/views/asset-types-view').then((m) => m.AssetTypesView), { ssr: false })
+const ImportView = dynamic(() => import('@/components/views/import-view').then((m) => m.ImportView), { ssr: false })
+const ReportsView = dynamic(() => import('@/components/views/reports-view').then((m) => m.ReportsView), { ssr: false })
+const MaintenanceView = dynamic(() => import('@/components/views/maintenance-view').then((m) => m.MaintenanceView), { ssr: false })
+const AuditLogView = dynamic(() => import('@/components/views/audit-log-view').then((m) => m.AuditLogView), { ssr: false })
+const LicensesView = dynamic(() => import('@/components/views/licenses-view').then((m) => m.LicensesView), { ssr: false })
+const AssetLabelsView = dynamic(() => import('@/components/views/asset-labels-view').then((m) => m.AssetLabelsView), { ssr: false })
+const CheckoutsView = dynamic(() => import('@/components/views/checkouts-view').then((m) => m.CheckoutsView), { ssr: false })
+const DepreciationView = dynamic(() => import('@/components/views/depreciation-view').then((m) => m.DepreciationView), { ssr: false })
+const NotificationsView = dynamic(() => import('@/components/views/notifications-view').then((m) => m.NotificationsView), { ssr: false })
+const VendorsView = dynamic(() => import('@/components/views/vendors-view').then((m) => m.VendorsView), { ssr: false })
+const PurchaseOrdersView = dynamic(() => import('@/components/views/purchase-orders-view').then((m) => m.PurchaseOrdersView), { ssr: false })
+const DisposalsView = dynamic(() => import('@/components/views/disposals-view').then((m) => m.DisposalsView), { ssr: false })
+const TagsView = dynamic(() => import('@/components/views/tags-view').then((m) => m.TagsView), { ssr: false })
+const BookingsView = dynamic(() => import('@/components/views/bookings-view').then((m) => m.BookingsView), { ssr: false })
+const ExpirationsView = dynamic(() => import('@/components/views/expirations-view').then((m) => m.ExpirationsView), { ssr: false })
+const UtilizationView = dynamic(() => import('@/components/views/utilization-view').then((m) => m.UtilizationView), { ssr: false })
+const AssetMapView = dynamic(() => import('@/components/views/asset-map-view').then((m) => m.AssetMapView), { ssr: false })
+const AssetTimelineView = dynamic(() => import('@/components/views/asset-timeline-view').then((m) => m.AssetTimelineView), { ssr: false })
+const AuditsView = dynamic(() => import('@/components/views/audits-view').then((m) => m.AuditsView), { ssr: false })
 import { useQuery } from '@tanstack/react-query'
 import { assetsApi } from '@/lib/api'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -41,29 +43,12 @@ import { toast } from 'sonner'
 function ViewRouter() {
   const { view, params } = useNav()
 
-  // Seed check: ping the seed endpoint if assets list is empty
-  const { data: assetsData, error } = useQuery({
-    queryKey: ['assets-seed-check'],
+  // Database connectivity check
+  const { error } = useQuery({
+    queryKey: ['assets-db-check'],
     queryFn: () => assetsApi.list({ pageSize: 1 }),
     retry: false,
   })
-
-  const isEmpty = !error && assetsData && assetsData.total === 0
-
-  useEffect(() => {
-    if (isEmpty) {
-      // Auto-seed on first load
-      fetch('/api/seed', { method: 'POST' })
-        .then((r) => r.json())
-        .then((res) => {
-          if (res.success && !res.skipped) {
-            toast.success('Database seeded with demo data!')
-            setTimeout(() => window.location.reload(), 800)
-          }
-        })
-        .catch(() => {})
-    }
-  }, [isEmpty])
 
   if (error) {
     return (

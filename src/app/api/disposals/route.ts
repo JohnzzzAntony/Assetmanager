@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
     const sp = req.nextUrl.searchParams
     const assetId = sp.get('assetId') || undefined
     const method = sp.get('method') || undefined
-    let data = disposalRepo.list()
+    let data = await disposalRepo.list()
     if (assetId) data = data.filter((d) => d.assetId === assetId)
     if (method) data = data.filter((d) => d.method === method)
     return NextResponse.json(data)
@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     if (!body.assetId) {
       return NextResponse.json({ error: 'assetId required' }, { status: 400 })
     }
-    const created = disposalRepo.create(body)
+    const created = await disposalRepo.create(body)
     return NextResponse.json(created, { status: 201 })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })

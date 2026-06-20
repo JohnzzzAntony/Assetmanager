@@ -16,10 +16,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AssetHub — IT Asset Manager",
+  title: "Maylaa Assets — IT Asset Manager",
   description: "Comprehensive IT asset management system with OCR-powered image capture, assignment tracking, and analytics.",
   keywords: ["IT assets", "asset management", "inventory", "OCR", "IT tracking"],
-  authors: [{ name: "AssetHub" }],
+  authors: [{ name: "Maylaa International" }],
   icons: {
     icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
   },

@@ -9,7 +9,7 @@ import path from 'path'
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ imageId: string }> }) {
   try {
     const { imageId } = await params
-    const img = imageRepo.get(imageId)
+    const img = await imageRepo.get(imageId)
     if (!img) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
     const fullPath = path.join('/home/z/my-project', img.filePath)

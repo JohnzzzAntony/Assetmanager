@@ -13,7 +13,7 @@ function csvEscape(value: unknown): string {
 
 export async function GET() {
   try {
-    const vendors = vendorRepo.list()
+    const vendors = await vendorRepo.list()
     const headers = ['Name', 'Category', 'Contact Person', 'Email', 'Phone', 'Website', 'Address', 'Tax ID', 'Payment Terms', 'Rating', 'Active', 'Purchase Orders', 'Total Spent', 'Notes', 'Created At']
     const rows = vendors.map((v) => [
       v.name, v.category || '', v.contactPerson || '', v.email || '', v.phone || '', v.website || '',

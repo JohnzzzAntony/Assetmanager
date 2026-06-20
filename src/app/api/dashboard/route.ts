@@ -14,15 +14,15 @@ import {
 
 export async function GET() {
   try {
-    const stats = getDashboardStats()
+    const stats = await getDashboardStats()
     // Enrich with maintenance + license stats
-    const maint = maintenanceRepo.stats()
-    const lic = licenseRepo.stats()
-    const recentActivityLog = activityLogRepo.recent(8)
-    const checkoutStats = checkoutRepo.stats()
-    const depStats = depreciationRepo.stats()
-    const notifCount = notificationRepo.count({ onlyUnread: true })
-    const allNotif = notificationRepo.list({ limit: 200 })
+    const maint = await maintenanceRepo.stats()
+    const lic = await licenseRepo.stats()
+    const recentActivityLog = await activityLogRepo.recent(8)
+    const checkoutStats = await checkoutRepo.stats()
+    const depStats = await depreciationRepo.stats()
+    const notifCount = await notificationRepo.count({ onlyUnread: true })
+    const allNotif = await notificationRepo.list({ limit: 200 })
     return NextResponse.json({
       ...stats,
       maintenance: maint,

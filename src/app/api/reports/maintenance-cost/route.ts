@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
   try {
     const sp = req.nextUrl.searchParams
     const months = sp.get('months') ? Number(sp.get('months')) : 12
-    const data = maintenanceCostRepo.report(months)
+    const data = await maintenanceCostRepo.report(months)
     return NextResponse.json(data)
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })

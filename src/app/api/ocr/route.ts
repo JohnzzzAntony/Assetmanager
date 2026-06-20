@@ -3,11 +3,12 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { imageRepo } from '@/lib/repo'
-import { writeFile, mkdir, readFile } from 'fs/promises'
+import { writeFile, mkdir } from 'fs/promises'
 import path from 'path'
 import { randomUUID } from 'crypto'
 
-const UPLOAD_DIR = '/home/z/my-project/uploads'
+// Use a relative path that works on any OS
+const UPLOAD_DIR = path.join(process.cwd(), 'uploads')
 
 const OCR_PROMPT = `You are an IT asset identification assistant. Analyze this image of an IT asset (computer, phone, tablet, monitor, peripheral, or spec label).
 
@@ -37,35 +38,91 @@ async function ensureUploadDir() {
   } catch {}
 }
 
-async function runOcr(base64Image: string, mimeType: string) {
-  const ZAI = (await import('z-ai-web-dev-sdk')).default
-  const zai = await ZAI.create()
-  const response = await zai.chat.completions.createVision({
+/**
+ * Resize image to stay under 180KB for NVIDIA NIM base64 limit.
+ * Uses sharp (already a project dependency).
+ */
+async function resizeForApi(buffer: Buffer): Promise<{ data: Buffer; mime: string }> {
+  try {
+    const sharp = (await import('sharp')).default
+    // Resize to max 1024px on longest side, convert to JPEG for smaller size
+    const resized = await sharp(buffer)
+      .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 80 })
+      .toBuffer()
+    return { data: resized, mime: 'image/jpeg' }
+  } catch {
+    // sharp not available or failed — return original
+    return { data: buffer, mime: 'image/png' }
+  }
+}
+
+// NVIDIA NIM models to try in order
+// meta/llama-3.2-11b-vision-instruct confirmed working with this API key
+const NVIDIA_VISION_MODELS = [
+  'meta/llama-3.2-11b-vision-instruct',   // ✓ confirmed 200
+  'meta/llama-3.2-90b-vision-instruct',   // larger, may work too
+  'microsoft/phi-3-vision-128k-instruct', // fallback
+]
+
+async function runNvidiaOcr(base64Image: string, mimeType: string): Promise<string> {
+  const apiKey = process.env.NVIDIA_API_KEY || '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'
+  const baseUrl = 'https://integrate.api.nvidia.com/v1'
+  const endpoint = `${baseUrl}/chat/completions`
+
+  const payload = {
     messages: [
       {
         role: 'user',
         content: [
           { type: 'text', text: OCR_PROMPT },
-          {
-            type: 'image_url',
-            image_url: { url: `data:${mimeType};base64,${base64Image}` },
-          },
+          { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64Image}` } },
         ],
       },
     ],
-    thinking: { type: 'disabled' },
-  })
-  const content = response.choices[0]?.message?.content || ''
-  return content
+    max_tokens: 1024,
+    temperature: 0.1,
+  }
+
+  let lastError = ''
+  for (const model of NVIDIA_VISION_MODELS) {
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({ ...payload, model }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        const content = data.choices?.[0]?.message?.content || ''
+        if (content) {
+          console.log(`[OCR] Success with model: ${model}`)
+          return content
+        }
+      } else {
+        const errText = await response.text()
+        lastError = `${model} → ${response.status}: ${errText.slice(0, 120)}`
+        console.warn(`[OCR] Model ${model} failed: ${response.status}`)
+        // 401 = bad key, no point trying more models
+        if (response.status === 401 || response.status === 403) break
+      }
+    } catch (e) {
+      lastError = `${model} → ${e instanceof Error ? e.message : String(e)}`
+    }
+  }
+
+  throw new Error(`All NVIDIA models failed. Last error: ${lastError}`)
 }
 
 function parseJsonResponse(text: string): Record<string, unknown> {
   let cleaned = text.trim()
-  // Strip markdown fences
   if (cleaned.startsWith('```')) {
     cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '')
   }
-  // Find first { and last }
   const start = cleaned.indexOf('{')
   const end = cleaned.lastIndexOf('}')
   if (start === -1 || end === -1) return { rawText: text }
@@ -86,28 +143,31 @@ export async function POST(req: NextRequest) {
     const ext = path.extname(file.name) || '.png'
     const fileName = `${randomUUID()}${ext}`
     const filePath = path.join(UPLOAD_DIR, fileName)
-    const buffer = Buffer.from(await file.arrayBuffer())
-    await writeFile(filePath, buffer)
+    const rawBuffer = Buffer.from(await file.arrayBuffer())
+    await writeFile(filePath, rawBuffer)
 
-    const mimeType = file.type || 'image/png'
-    const base64 = buffer.toString('base64')
+    // Resize image to stay under NVIDIA's 180KB base64 limit
+    const { data: imageBuffer, mime: mimeType } = await resizeForApi(rawBuffer)
+    const base64 = imageBuffer.toString('base64')
+
+    console.log(`[OCR] Image size after resize: ${Math.round(imageBuffer.length / 1024)}KB (base64: ${Math.round(base64.length / 1024)}KB)`)
 
     // Create image record with pending status
-    const img = imageRepo.create({
+    const img = await imageRepo.create({
       fileName: file.name,
       filePath: `/uploads/${fileName}`,
-      mimeType,
+      mimeType: file.type || 'image/png',
       fileSize: file.size,
       ocrStatus: 'Pending',
-      ocrEngine: 'VLM',
+      ocrEngine: 'NVIDIA-VLM',
     })
 
-    // Run OCR
+    // Run OCR with model fallback
     let result: Record<string, unknown> = {}
     let rawText = ''
     let ocrStatus = 'Success'
     try {
-      const vlmResponse = await runOcr(base64, mimeType)
+      const vlmResponse = await runNvidiaOcr(base64, mimeType)
       rawText = vlmResponse
       result = parseJsonResponse(vlmResponse)
       if (result.rawText && typeof result.rawText === 'string') {
@@ -116,12 +176,13 @@ export async function POST(req: NextRequest) {
     } catch (err) {
       ocrStatus = 'Failed'
       rawText = `OCR failed: ${err instanceof Error ? err.message : String(err)}`
+      console.error('[OCR] All providers failed:', rawText)
     }
 
-    imageRepo.update(img.id, {
+    await imageRepo.update(img.id, {
       processedText: rawText,
       ocrStatus,
-      ocrEngine: 'VLM',
+      ocrEngine: 'NVIDIA-VLM',
       parsedFields: JSON.stringify(result),
       processedAt: new Date().toISOString(),
     })

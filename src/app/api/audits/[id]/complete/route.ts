@@ -10,7 +10,7 @@ export async function POST(
 ) {
   try {
     const { id } = await params
-    const result = assetAuditRepo.complete(id)
+    const result = await assetAuditRepo.complete(id)
     return NextResponse.json(result, { status: 200 })
   } catch (e) {
     const msg = String(e)

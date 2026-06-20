@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
         )
       }
     }
-    const result = expiryBulkRenewRepo.renewBulk(body)
+    const result = await expiryBulkRenewRepo.renewBulk(body)
     return NextResponse.json(result, { status: 201 })
   } catch (e) {
     const msg = String(e)

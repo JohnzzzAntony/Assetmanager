@@ -1,143 +1,166 @@
 // IT Asset Manager - Prisma Schema
-// Based on the wireframe for IT asset management
+// Based on the SQLite database schema and Next.js repository layer
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model AssetType {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  description String?
-  icon        String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  assets      Asset[]
+  id                String             @id
+  name              String             @unique
+  description       String?
+  icon              String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  assets            Asset[]
+  depreciationRules DepreciationRule[]
+  poItems           PurchaseOrderItem[]
 }
 
 model Department {
-  id        String   @id @default(cuid())
-  name      String   @unique
+  id        String              @id
+  name      String              @unique
   code      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
   persons   Person[]
   assets    Asset[]
   history   AssignmentHistory[]
 }
 
 model Location {
-  id        String   @id @default(cuid())
-  name      String   @unique
+  id        String              @id
+  name      String              @unique
   address   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
   persons   Person[]
   assets    Asset[]
   history   AssignmentHistory[]
 }
 
 model Person {
-  id          String   @id @default(cuid())
-  fullName    String
-  email       String?
-  phone       String?
-  role        String?
-  departmentId String?
-  locationId   String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  department  Department? @relation(fields: [departmentId], references: [id])
-  location    Location?   @relation(fields: [locationId], references: [id])
-  assets      Asset[]
-  history     AssignmentHistory[]
+  id                        String              @id
+  fullName                  String
+  email                     String?
+  phone                     String?
+  role                      String?
+  departmentId              String?
+  locationId                String?
+  createdAt                 DateTime            @default(now())
+  updatedAt                 DateTime            @updatedAt
+  department                Department?         @relation(fields: [departmentId], references: [id])
+  location                  Location?           @relation(fields: [locationId], references: [id])
+  assets                    Asset[]
+  history                   AssignmentHistory[]
+  checkoutRequestsRequested CheckoutRequest[]   @relation("RequestedBy")
+  checkoutRequestsApproved  CheckoutRequest[]   @relation("ApprovedBy")
+  poRequested               PurchaseOrder[]     @relation("PORequestedBy")
+  poApproved                PurchaseOrder[]     @relation("POApprovedBy")
+  disposalsApproved         AssetDisposal[]
+  bookings                  AssetBooking[]      @relation("BookedBy")
+  bookingsRequested         AssetBooking[]      @relation("BookingRequestedBy")
+  bookingsApproved          AssetBooking[]      @relation("BookingApprovedBy")
+  auditsStarted             AssetAudit[]
 }
 
 model Asset {
-  id                String   @id @default(cuid())
-  assetTag          String?  @unique
-  assetTypeId       String
-  make              String?
-  model             String?
-  modelNumber       String?
-  serialNumber      String?
-  partNumber        String?
-  status            String   @default("In Stock")
-  purchaseDate      DateTime?
-  cost              Float?
-  currency          String   @default("USD")
-  warrantyExpiry    DateTime?
-  os                String?
-  osKey             String?
-  officeKey         String?
-  cpu               String?
-  gpu               String?
-  ram               String?
-  storage           String?
-  color             String?
-
-  // Mobile-specific
-  imei1             String?
-  imei2             String?
-  rom               String?
-  otpMobileNumber   String?
-  googleAppleAccount String?
-
-  // Peripherals
-  monitorMake       String?
-  monitorModel      String?
-  monitorSn         String?
-  monitorSize       String?
-  keyboardMake      String?
-  keyboardModel     String?
-  keyboardSn        String?
-  mouseMake         String?
-  mouseModel        String?
-  mouseSn           String?
-
-  // Assignment
-  assignedToId      String?
-  departmentId      String?
-  locationId        String?
-
-  comments          String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  assetType         AssetType  @relation(fields: [assetTypeId], references: [id])
-  assignedTo        Person?    @relation(fields: [assignedToId], references: [id])
-  department        Department? @relation(fields: [departmentId], references: [id])
-  location          Location?  @relation(fields: [locationId], references: [id])
-  images            AssetImage[]
-  history           AssignmentHistory[]
+  id                   String                @id
+  assetTag             String?               @unique
+  assetTypeId          String
+  make                 String?
+  model                String?
+  modelNumber          String?
+  serialNumber         String?
+  partNumber           String?
+  status               String                @default("In Stock")
+  purchaseDate         DateTime?
+  cost                 Float?
+  currency             String                @default("USD")
+  warrantyExpiry       DateTime?
+  os                   String?
+  osKey                String?
+  officeKey            String?
+  cpu                  String?
+  gpu                  String?
+  ram                  String?
+  storage              String?
+  color                String?
+  imei1                String?
+  imei2                String?
+  rom                  String?
+  otpMobileNumber      String?
+  googleAppleAccount   String?
+  monitorMake          String?
+  monitorModel         String?
+  monitorSn            String?
+  monitorSize          String?
+  keyboardMake         String?
+  keyboardModel        String?
+  keyboardSn           String?
+  mouseMake            String?
+  mouseModel           String?
+  mouseSn              String?
+  assignedToId         String?
+  departmentId         String?
+  locationId           String?
+  computerName          String?
+  manufactureYear       String?
+  mousePn               String?
+  monitorPartNumber     String?
+  ipAddress             String?
+  tonersModel           String?
+  deviceType            String?
+  qty                   String?
+  barcodeScannerModel   String?
+  barcodeScannerSn      String?
+  scaleMachineIpAddress String?
+  hddInstalledDate      String?
+  hddInstalledDate2     String?
+  comments             String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  assetType            AssetType             @relation(fields: [assetTypeId], references: [id])
+  assignedTo           Person?               @relation(fields: [assignedToId], references: [id])
+  department           Department?           @relation(fields: [departmentId], references: [id])
+  location             Location?             @relation(fields: [locationId], references: [id])
+  images               AssetImage[]
+  history              AssignmentHistory[]
+  maintenanceSchedules MaintenanceSchedule[]
+  licenses             AssetLicense[]
+  checkoutRequests     CheckoutRequest[]
+  disposals            AssetDisposal[]
+  tags                 AssetTagLink[]
+  bookings             AssetBooking[]
+  auditItems           AssetAuditItem[]
 }
 
 model AssignmentHistory {
-  id           String    @id @default(cuid())
+  id           String      @id
   assetId      String
   personId     String?
   departmentId String?
   locationId   String?
-  assignedOn   DateTime  @default(now())
+  assignedOn   DateTime    @default(now())
   unassignedOn DateTime?
   reason       String?
-  action       String    @default("Assigned")
+  action       String      @default("Assigned")
   notes        String?
-  createdAt    DateTime  @default(now())
-
-  asset        Asset      @relation(fields: [assetId], references: [id], onDelete: Cascade)
-  person       Person?    @relation(fields: [personId], references: [id])
+  createdAt    DateTime    @default(now())
+  asset        Asset       @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  person       Person?     @relation(fields: [personId], references: [id])
   department   Department? @relation(fields: [departmentId], references: [id])
-  location     Location?  @relation(fields: [locationId], references: [id])
+  location     Location?   @relation(fields: [locationId], references: [id])
 }
 
 model AssetImage {
-  id            String    @id @default(cuid())
+  id            String    @id
   assetId       String?
   fileName      String
   filePath      String
@@ -149,15 +172,290 @@ model AssetImage {
   parsedFields  String?
   createdAt     DateTime  @default(now())
   processedAt   DateTime?
-
   asset         Asset?    @relation(fields: [assetId], references: [id], onDelete: Cascade)
 }
 
 model ActivityLog {
-  id        String   @id @default(cuid())
-  action    String
+  id         String   @id
+  action     String
   entityType String
-  entityId  String
-  details   String?
-  createdAt DateTime @default(now())
+  entityId   String
+  details    String?
+  createdAt  DateTime @default(now())
 }
+
+model MaintenanceSchedule {
+  id           String   @id
+  assetId      String
+  type         String   @default("Preventive")
+  title        String
+  description  String?
+  scheduledFor String
+  completedAt  String?
+  status       String   @default("Scheduled")
+  cost         Float?
+  performedBy  String?
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  asset        Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+}
+
+model SoftwareLicense {
+  id           String         @id
+  name         String
+  vendor       String?
+  key          String?
+  seatsTotal   Int            @default(1)
+  seatsUsed    Int            @default(0)
+  purchaseDate String?
+  expiryDate   String?
+  cost         Float?
+  currency     String         @default("USD")
+  category     String?
+  notes        String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  licenses     AssetLicense[]
+}
+
+model AssetLicense {
+  id         String          @id
+  assetId    String
+  licenseId  String
+  assignedAt String
+  createdAt  DateTime        @default(now())
+  asset      Asset           @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  license    SoftwareLicense @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+}
+
+model CheckoutRequest {
+  id                  String   @id
+  assetId             String
+  requestedById       String
+  requestType         String   @default("Checkout")
+  status              String   @default("Pending")
+  reason              String?
+  requestedStartDate  String
+  requestedReturnDate String?
+  approvedById        String?
+  approvedAt          String?
+  decisionNotes       String?
+  checkedOutAt        String?
+  checkedInAt         String?
+  actualReturnDate    String?
+  conditionAtReturn   String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  asset               Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  requestedBy         Person   @relation("RequestedBy", fields: [requestedById], references: [id], onDelete: Cascade)
+  approvedBy          Person?  @relation("ApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+}
+
+model DepreciationRule {
+  id                  String     @id
+  name                String
+  assetTypeId         String?
+  method              String     @default("straight-line")
+  usefulLifeYears     Int        @default(4)
+  salvageValuePercent Float      @default(0)
+  description         String?
+  isActive            Int        @default(1)
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+  assetType           AssetType? @relation(fields: [assetTypeId], references: [id], onDelete: SetNull)
+}
+
+model Notification {
+  id          String   @id
+  type        String
+  severity    String   @default("info")
+  title       String
+  message     String
+  entityType  String?
+  entityId    String?
+  isRead      Int      @default(0)
+  actionUrl   String?
+  actionLabel String?
+  createdAt   DateTime @default(now())
+  readAt      String?
+}
+
+model Vendor {
+  id            String          @id
+  name          String
+  category      String?
+  contactPerson String?
+  email         String?
+  phone         String?
+  website       String?
+  address       String?
+  taxId         String?
+  paymentTerms  String?
+  rating        Int             @default(0)
+  isActive      Int             @default(1)
+  notes         String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  purchaseOrders PurchaseOrder[]
+}
+
+model PurchaseOrder {
+  id            String              @id
+  poNumber      String              @unique
+  vendorId      String
+  status        String              @default("Draft")
+  orderDate     String
+  expectedDate  String?
+  receivedDate  String?
+  subtotal      Float               @default(0)
+  taxRate       Float               @default(0)
+  taxAmount     Float               @default(0)
+  shippingCost  Float               @default(0)
+  totalAmount   Float               @default(0)
+  currency      String              @default("USD")
+  requestedById String?
+  approvedById  String?
+  approvedAt    String?
+  notes         String?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  vendor        Vendor              @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+  requestedBy   Person?             @relation("PORequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
+  approvedBy    Person?             @relation("POApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  items         PurchaseOrderItem[]
+}
+
+model PurchaseOrderItem {
+  id               String     @id
+  poId             String
+  assetTypeId      String?
+  description      String
+  quantity         Int        @default(1)
+  unitPrice        Float      @default(0)
+  totalPrice       Float      @default(0)
+  receivedQuantity Int        @default(0)
+  notes            String?
+  createdAt        DateTime   @default(now())
+  purchaseOrder    PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
+  assetType        AssetType?    @relation(fields: [assetTypeId], references: [id], onDelete: SetNull)
+}
+
+model AssetDisposal {
+  id                     String   @id
+  assetId                String
+  disposalNumber         String?  @unique
+  method                 String   @default("Sold")
+  reason                 String?
+  disposalDate           String
+  residualValue          Float    @default(0)
+  disposalCost           Float    @default(0)
+  netProceeds            Float    @default(0)
+  buyerRecipient         String?
+  conditionAtDisposal    String?
+  environmentalCompliant Int      @default(1)
+  certificateNumber      String?
+  approvedById           String?
+  approvedAt             String?
+  notes                  String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  asset                  Asset    @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  approvedBy             Person?  @relation(fields: [approvedById], references: [id], onDelete: SetNull)
+}
+
+model AssetTag {
+  id          String         @id
+  name        String         @unique
+  color       String         @default("slate")
+  description String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  links       AssetTagLink[]
+}
+
+model AssetTagLink {
+  id        String   @id
+  assetId   String
+  tagId     String
+  createdAt DateTime @default(now())
+  asset     Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  tag       AssetTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+}
+
+model AssetBooking {
+  id            String   @id
+  assetId       String
+  bookedById    String
+  title         String
+  purpose       String?
+  status        String   @default("Pending")
+  startDate     String
+  endDate       String
+  requestedById String?
+  approvedById  String?
+  approvedAt    String?
+  decisionNotes String?
+  checkedOutAt  String?
+  checkedInAt   String?
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  asset         Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  bookedBy      Person   @relation("BookedBy", fields: [bookedById], references: [id], onDelete: Cascade)
+  requestedBy   Person?  @relation("BookingRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
+  approvedBy    Person?  @relation("BookingApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+}
+
+model SavedReport {
+  id          String   @id
+  name        String
+  description String?
+  section     String?
+  config      String   @default("{}")
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model AssetAudit {
+  id          String           @id
+  auditNumber String           @unique
+  title       String
+  scope       String           @default("all")
+  scopeId     String?
+  status      String           @default("Open")
+  startedAt   String?
+  completedAt String?
+  startedById String?
+  notes       String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  startedBy   Person?          @relation(fields: [startedById], references: [id], onDelete: SetNull)
+  items       AssetAuditItem[]
+}
+
+model AssetAuditItem {
+  id            String     @id
+  auditId       String
+  assetId       String?
+  assetTag      String?
+  status        String     @default("Pending")
+  expected      Int        @default(1)
+  scannedAt     String?
+  scannedByName String?
+  notes         String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  audit         AssetAudit @relation(fields: [auditId], references: [id], onDelete: Cascade)
+  asset         Asset?     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+}
+
+model ImportAlias {
+  id        String   @id
+  alias     String   @unique
+  field     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+

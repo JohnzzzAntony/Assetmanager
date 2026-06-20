@@ -171,8 +171,8 @@ function Brand() {
         <Boxes className="h-5 w-5 text-primary-foreground" />
       </div>
       <div className="flex flex-col leading-tight">
-        <span className="text-sm font-bold tracking-tight">AssetHub</span>
-        <span className="text-[10px] text-muted-foreground">IT Asset Manager</span>
+        <span className="text-sm font-bold tracking-tight">Maylaa Assets</span>
+        <span className="text-[10px] text-muted-foreground">Maylaa International</span>
       </div>
     </Link>
   )

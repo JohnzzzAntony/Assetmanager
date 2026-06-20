@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
   try {
     const sp = req.nextUrl.searchParams
     const years = sp.get('years') ? Math.min(Math.max(Number(sp.get('years')) || 2, 2), 5) : 2
-    const data = assetLifecycleRepo.yoyByType(years)
+    const data = await assetLifecycleRepo.yoyByType(years)
     const totals = {
       currentYear: data.reduce((s, d) => s + d.currentYear, 0),
       previousYear: data.reduce((s, d) => s + d.previousYear, 0),

@@ -73,7 +73,7 @@ function generateQrLikeSvg(value: string, size = 100): string {
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    const asset = assetRepo.get(id)
+    const asset = await assetRepo.get(id)
     if (!asset) return NextResponse.json({ error: 'Asset not found' }, { status: 404 })
 
     const sp = req.nextUrl.searchParams
@@ -92,28 +92,62 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       })
     }
 
-    // Return a printable SVG label
-    const qr = generateQrLikeSvg(label, 120)
-    const barcode = generateBarcodeSvg(label, 280, 50)
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="220" viewBox="0 0 320 220">
-      <rect width="320" height="220" fill="#fff" stroke="#000" stroke-width="1"/>
-      <text x="10" y="22" font-family="Arial, sans-serif" font-size="14" font-weight="bold">AssetHub Label</text>
-      <line x1="10" y1="28" x2="310" y2="28" stroke="#000" stroke-width="0.5"/>
-      <g transform="translate(10, 36)">
-        ${qr}
-      </g>
-      <g transform="translate(140, 50)">
-        <text font-family="Arial, sans-serif" font-size="11" fill="#444">Asset Tag</text>
-        <text y="16" font-family="monospace" font-size="18" font-weight="bold">${label}</text>
-        <text y="42" font-family="Arial, sans-serif" font-size="11" fill="#444">Description</text>
-        <text y="58" font-family="Arial, sans-serif" font-size="13">${fullName.substring(0, 24)}</text>
-        <text y="84" font-family="Arial, sans-serif" font-size="11" fill="#444">Serial Number</text>
-        <text y="100" font-family="monospace" font-size="11">${asset.serialNumber || '—'}</text>
-        <text y="126" font-family="Arial, sans-serif" font-size="11" fill="#444">Type</text>
-        <text y="142" font-family="Arial, sans-serif" font-size="13">${asset.assetType?.name || '—'}</text>
-      </g>
-      <g transform="translate(20, 165)">
-        ${barcode}
+    // Label physical dimensions: 45.7mm x 21.2mm
+    // SVG viewBox in 1/10 mm units => 457 x 212 user units (1 user unit = 0.1mm)
+    // Rendered at ~3.78px/mm: width≈173px, height≈80px (but we use a larger canvas for quality)
+    const W = 457   // 45.7 mm * 10
+    const H = 212   // 21.2 mm * 10
+
+    // QR-like pattern (compact, 80x80 units in the left area)
+    const qrSize = 160
+    const qr = generateQrLikeSvg(label, qrSize)
+
+    // Barcode across the bottom
+    const barcode = generateBarcodeSvg(label, W - qrSize - 20, 30)
+
+    // Format purchase date
+    const purchaseDateStr = asset.purchaseDate
+      ? new Date(asset.purchaseDate as string).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+      : '—'
+
+    // Truncate helpers
+    const trunc = (s: string | null | undefined, n: number) =>
+      s ? (s.length > n ? s.slice(0, n - 1) + '…' : s) : '—'
+
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+      <!-- Label background -->
+      <rect width="${W}" height="${H}" fill="#fff" stroke="#222" stroke-width="1.5"/>
+
+      <!-- Header band -->
+      <rect width="${W}" height="30" fill="#0f172a"/>
+      <text x="${W / 2}" y="20" font-family="Arial, sans-serif" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle" letter-spacing="1">Maylaa International</text>
+
+      <!-- QR code block -->
+      <g transform="translate(6, 36)">${qr}</g>
+
+      <!-- Vertical divider -->
+      <line x1="${qrSize + 12}" y1="34" x2="${qrSize + 12}" y2="${H - 2}" stroke="#ddd" stroke-width="1"/>
+
+      <!-- Right side fields -->
+      <g transform="translate(${qrSize + 20}, 36)" font-family="Arial, sans-serif">
+        <!-- Asset Tag -->
+        <text y="10" font-size="10" fill="#666" font-weight="bold">Asset Tag</text>
+        <text y="24" font-size="13" font-weight="bold" fill="#0f172a" font-family="monospace">${trunc(asset.assetTag, 18)}</text>
+
+        <!-- Description (Make + Model) -->
+        <text y="38" font-size="10" fill="#666" font-weight="bold">Description</text>
+        <text y="50" font-size="11" fill="#1e293b">${trunc(fullName, 26)}</text>
+
+        <!-- Serial Number -->
+        <text y="64" font-size="10" fill="#666" font-weight="bold">Serial Number</text>
+        <text y="76" font-size="11" fill="#1e293b" font-family="monospace">${trunc(asset.serialNumber, 24)}</text>
+
+        <!-- Type -->
+        <text y="90" font-size="10" fill="#666" font-weight="bold">Type</text>
+        <text y="102" font-size="11" fill="#1e293b">${trunc(asset.assetType?.name, 20)}</text>
+
+        <!-- Barcode strip -->
+        <g transform="translate(-6, 112)">${barcode}</g>
       </g>
     </svg>`
 

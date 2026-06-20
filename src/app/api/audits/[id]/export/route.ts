@@ -10,9 +10,9 @@ export async function GET(
 ) {
   try {
     const { id } = await params
-    const csv = assetAuditRepo.exportCsv(id)
+    const csv = await assetAuditRepo.exportCsv(id)
     // Look up audit for filename (parse auditNumber from first CSV line)
-    const data = assetAuditRepo.get(id)
+    const data = await assetAuditRepo.get(id)
     const auditNumber = data?.audit.auditNumber || id.slice(0, 8)
     return new NextResponse(csv, {
       status: 200,
