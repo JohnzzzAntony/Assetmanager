@@ -26,6 +26,10 @@
 import { Pool } from 'pg'
 import { randomUUID } from 'crypto'
 
+// Return COUNT/SUM (int8) and NUMERIC as JS numbers instead of strings (matches old SQLite behaviour)
+types.setTypeParser(20, (v) => parseInt(v, 10))
+types.setTypeParser(1700, (v) => parseFloat(v))
+
 const CONN = process.env.DATABASE_URL ?? ''
 
 // Singleton pool — reused across hot-reloads in dev

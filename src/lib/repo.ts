@@ -755,12 +755,12 @@ export const assetRepo = {
         t.name as assetType,
         COUNT(DISTINCT a.id) as assetCount,
         COALESCE(SUM(a.cost), 0) as purchaseCost,
-        COALESCE((SELECT SUM(m.cost) FROM MaintenanceSchedule m WHERE m.assetId = a.id AND m.cost IS NOT NULL), 0) as maintenanceCost,
-        COALESCE((SELECT SUM(d.disposalCost) FROM AssetDisposal d WHERE d.assetId = a.id), 0) as disposalCost,
-        COALESCE((SELECT SUM(d.residualValue) FROM AssetDisposal d WHERE d.assetId = a.id), 0) as residualValue
+        COALESCE((SELECT SUM(m.cost) FROM MaintenanceSchedule m JOIN Asset a2 ON m.assetId = a2.id WHERE a2.assetTypeId = t.id AND m.cost IS NOT NULL), 0) as maintenanceCost,
+        COALESCE((SELECT SUM(d.disposalCost) FROM AssetDisposal d JOIN Asset a2 ON d.assetId = a2.id WHERE a2.assetTypeId = t.id), 0) as disposalCost,
+        COALESCE((SELECT SUM(d.residualValue) FROM AssetDisposal d JOIN Asset a2 ON d.assetId = a2.id WHERE a2.assetTypeId = t.id), 0) as residualValue
       FROM Asset a
       JOIN AssetType t ON a.assetTypeId = t.id
-      GROUP BY t.id
+      GROUP BY t.id, t.name
       ORDER BY purchaseCost DESC
     `).all() as {
       assetType: string
@@ -793,17 +793,17 @@ export const assetRepo = {
       result[key] = { purchase: 0, maintenance: 0, disposal: 0 }
     }
     // Asset purchases
-    const assetRows = await db.prepare(`SELECT substr(purchaseDate, 1, 7) as month, COALESCE(SUM(cost), 0) as total FROM Asset WHERE purchaseDate IS NOT NULL GROUP BY month`).all() as { month: string; total: number }[]
+    const assetRows = await db.prepare(`SELECT substr(CAST(purchaseDate AS TEXT), 1, 7) as month, COALESCE(SUM(cost), 0) as total FROM Asset WHERE purchaseDate IS NOT NULL GROUP BY month`).all() as { month: string; total: number }[]
     for (const r of assetRows) {
       if (result[r.month]) result[r.month].purchase = r.total
     }
     // Maintenance costs (by scheduledFor date)
-    const maintRows = await db.prepare(`SELECT substr(scheduledFor, 1, 7) as month, COALESCE(SUM(cost), 0) as total FROM MaintenanceSchedule WHERE scheduledFor IS NOT NULL AND cost IS NOT NULL GROUP BY month`).all() as { month: string; total: number }[]
+    const maintRows = await db.prepare(`SELECT substr(CAST(scheduledFor AS TEXT), 1, 7) as month, COALESCE(SUM(cost), 0) as total FROM MaintenanceSchedule WHERE scheduledFor IS NOT NULL AND cost IS NOT NULL GROUP BY month`).all() as { month: string; total: number }[]
     for (const r of maintRows) {
       if (result[r.month]) result[r.month].maintenance = r.total
     }
     // Disposal costs
-    const dispRows = await db.prepare(`SELECT substr(disposalDate, 1, 7) as month, COALESCE(SUM(disposalCost), 0) as total FROM AssetDisposal GROUP BY month`).all() as { month: string; total: number }[]
+    const dispRows = await db.prepare(`SELECT substr(CAST(disposalDate AS TEXT), 1, 7) as month, COALESCE(SUM(disposalCost), 0) as total FROM AssetDisposal GROUP BY month`).all() as { month: string; total: number }[]
     for (const r of dispRows) {
       if (result[r.month]) result[r.month].disposal = r.total
     }
@@ -2529,11 +2529,11 @@ export const assetLifecycleRepo = {
     const yearStrs = years.map((y) => String(y))
     const rows_ = rows<{ assetType: string; year: number; total: number }>(
       await db.prepare(`
-        SELECT t.name as assetType, CAST(substr(a.purchaseDate, 1, 4) AS INTEGER) as year, COALESCE(SUM(a.cost), 0) as total
+        SELECT t.name as assetType, CAST(substr(CAST(a.purchaseDate AS TEXT), 1, 4) AS INTEGER) as year, COALESCE(SUM(a.cost), 0) as total
         FROM Asset a
         JOIN AssetType t ON a.assetTypeId = t.id
         WHERE a.purchaseDate IS NOT NULL
-          AND substr(a.purchaseDate, 1, 4) IN (${placeholders})
+          AND substr(CAST(a.purchaseDate AS TEXT), 1, 4) IN (${placeholders})
         GROUP BY t.id, year
         ORDER BY t.name
       `).all(...yearStrs)
@@ -3562,10 +3562,10 @@ export const costForecastRepo = {
     // Purchase cost history (from Asset.purchaseDate)
     const purchaseRows = rows<{ month: string; total: number }>(
       await db.prepare(`
-        SELECT substr(purchaseDate, 1, 7) as month, COALESCE(SUM(cost), 0) as total
+        SELECT substr(CAST(purchaseDate AS TEXT), 1, 7) as month, COALESCE(SUM(cost), 0) as total
         FROM Asset
         WHERE purchaseDate IS NOT NULL AND cost IS NOT NULL
-          AND substr(purchaseDate, 1, 7) IN (${allMonths.map(() => '?').join(',')})
+          AND substr(CAST(purchaseDate AS TEXT), 1, 7) IN (${allMonths.map(() => '?').join(',')})
         GROUP BY month
       `).all(...allMonths)
     )
@@ -3574,10 +3574,10 @@ export const costForecastRepo = {
     // Maintenance cost history (from MaintenanceSchedule)
     const maintRows = rows<{ month: string; total: number }>(
       await db.prepare(`
-        SELECT substr(scheduledFor, 1, 7) as month, COALESCE(SUM(cost), 0) as total
+        SELECT substr(CAST(scheduledFor AS TEXT), 1, 7) as month, COALESCE(SUM(cost), 0) as total
         FROM MaintenanceSchedule
         WHERE cost IS NOT NULL AND cost > 0 AND scheduledFor IS NOT NULL
-          AND substr(scheduledFor, 1, 7) IN (${allMonths.map(() => '?').join(',')})
+          AND substr(CAST(scheduledFor AS TEXT), 1, 7) IN (${allMonths.map(() => '?').join(',')})
         GROUP BY month
       `).all(...allMonths)
     )
