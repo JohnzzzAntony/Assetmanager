@@ -23,7 +23,7 @@
 //   The db.prepare(...).all() etc. return Promises.
 // ============================================================
 
-import { Pool } from 'pg'
+import { Pool, types } from 'pg'
 import { randomUUID } from 'crypto'
 
 // Return COUNT/SUM (int8) and NUMERIC as JS numbers instead of strings (matches old SQLite behaviour)
