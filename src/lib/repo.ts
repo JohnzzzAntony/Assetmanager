@@ -1582,7 +1582,7 @@ export const depreciationRepo = {
     if (asset.cost == null || asset.cost <= 0 || !asset.purchaseDate) {
       return null
     }
-    const rule = this.findByAssetType(asset.assetTypeId)
+    const rule = await this.findByAssetType(asset.assetTypeId)
     const usefulLifeYears = rule?.usefulLifeYears ?? 4
     const salvagePercent = rule?.salvageValuePercent ?? 0
     const method = rule?.method ?? 'straight-line'
@@ -1659,13 +1659,13 @@ export const depreciationRepo = {
         ...a,
         assetType: a.typeName ? { id: a.assetTypeId, name: a.typeName } : undefined,
       } as Asset
-      const calc = this.calculate(asset)
+      const calc = await this.calculate(asset)
       if (calc) results.push(calc)
     }
     return results
   },
   async stats(): { totalAssets: number; totalPurchaseValue: number; totalCurrentValue: number; totalDepreciation: number; fullyDepreciatedCount: number } {
-    const calcs = this.calculateForAll()
+    const calcs = await this.calculateForAll()
     return {
       totalAssets: calcs.length,
       totalPurchaseValue: Math.round(calcs.reduce((s, c) => s + c.purchaseCost, 0) * 100) / 100,
